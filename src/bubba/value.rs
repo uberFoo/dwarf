@@ -165,7 +165,7 @@ impl Value {
                 }
                 write!(f, "] }}")
             }
-            Self::List { ty: _, inner } => {
+            Self::List { ty, inner } => {
                 let inner = s_read!(inner);
                 let mut first_time = true;
                 write!(f, "[")?;
@@ -180,11 +180,7 @@ impl Value {
                 }
                 write!(f, "]")
             }
-            Self::Map {
-                // key_ty: _,
-                // value_ty: _,
-                inner,
-            } => {
+            Self::Map { inner } => {
                 write!(f, "{{")?;
                 let mut first_time = true;
                 for (key, value) in &*s_read!(inner) {
@@ -540,7 +536,7 @@ impl fmt::Display for Value {
                 }
                 write!(f, "] }}")
             }
-            Self::List { ty: _, inner } => {
+            Self::List { inner, .. } => {
                 let inner = s_read!(inner);
                 let mut first_time = true;
                 write!(f, "[")?;
@@ -560,11 +556,7 @@ impl fmt::Display for Value {
                 }
                 write!(f, "]")
             }
-            Self::Map {
-                // key_ty: _,
-                // value_ty: _,
-                inner,
-            } => {
+            Self::Map { inner } => {
                 write!(f, "{{")?;
                 let mut first_time = true;
                 for (key, value) in &*s_read!(inner) {

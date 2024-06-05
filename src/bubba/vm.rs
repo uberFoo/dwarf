@@ -17,7 +17,7 @@ use tracy_client::{non_continuous_frame, span, Client};
 
 use abi_stable::{
     library::{lib_header_from_path, LibrarySuffix, RawLibrary},
-    std_types::{RBox, RErr, ROk, ROption, RResult, Tuple2},
+    std_types::{RErr, ROk},
 };
 use ansi_term::Colour;
 use crossbeam::channel::{unbounded, Receiver, Sender};
@@ -253,11 +253,6 @@ impl VM {
 
         // 🚧 This is such an ugly hack. There should probably be a thread pool.
         // OTOH, if this is sufficient...
-        let mut vm_clone = vm.clone();
-        thread::spawn(move || loop {
-            vm_clone.lambda_listen();
-        });
-
         let mut vm_clone = vm.clone();
         thread::spawn(move || loop {
             vm_clone.lambda_listen();
@@ -2127,87 +2122,6 @@ impl VM {
         old_stack.push(value.into());
 
         Ok(())
-    }
-}
-
-// I think that this is here for the benefit of the Result type.
-impl From<(FfiValue, &Value)> for Value {
-    fn from((ffi_value, ty): (FfiValue, &Value)) -> Self {
-        match ffi_value {
-            FfiValue::Boolean(bool_) => Self::Boolean(bool_),
-            FfiValue::Empty => Self::Empty,
-            // FfiValue::Error(e) => Self::Error(e.into()),
-            FfiValue::Float(num) => Self::Float(num),
-            FfiValue::Integer(num) => Self::Integer(num),
-            FfiValue::List(list) => {
-                let Value::ValueType(ty) = ty else {
-                    unreachable!()
-                };
-                let ty = ty.clone();
-                let vec: Vec<_> = list
-                    .into_iter()
-                    .map(|v| new_ref!(Value, v.into()))
-                    .collect();
-                let list = std::sync::Arc::new(std::sync::RwLock::new(vec));
-                Self::List {
-                    ty: new_ref!(ValueType, ty),
-                    inner: list,
-                }
-            }
-            FfiValue::Map(map) => {
-                let map: StdHashMap<String, _> = map
-                    .0
-                    .into_iter()
-                    .map(|Tuple2(k, v)| (k.into(), new_ref!(Value, v.into())))
-                    .collect();
-                let map = std::sync::Arc::new(std::sync::RwLock::new(map));
-                Self::Map { inner: map }
-            }
-            FfiValue::Option(option) => match option {
-                ROption::RNone => Self::Empty,
-                ROption::RSome(value) => {
-                    <(FfiValue, &Value) as Into<Value>>::into((RBox::into_inner(value), ty))
-                }
-            },
-            // FfiValue::ProxyType(plugin) => Self::ProxyType {
-            //     module: plugin.module.into(),
-            //     obj_ty: plugin.ty.into(),
-            //     id: plugin.id.into(),
-            //     plugin: new_ref!(PluginType, plugin.plugin),
-            // },
-            FfiValue::Range(range) => Self::Range(range.start..range.end),
-            FfiValue::Result(result) => {
-                let tuple = match result {
-                    RResult::RErr(err) => TupleEnum {
-                        variant: "Err".to_owned(),
-                        value: new_ref!(
-                            Value,
-                            <(FfiValue, &Value) as Into<Value>>::into((RBox::into_inner(err), ty))
-                        ),
-                    },
-                    RResult::ROk(ok) => TupleEnum {
-                        variant: "Ok".to_owned(),
-                        value: new_ref!(
-                            Value,
-                            <(FfiValue, &Value) as Into<Value>>::into((RBox::into_inner(ok), ty))
-                        ),
-                    },
-                };
-
-                let Value::ValueType(ty) = ty else {
-                    unreachable!()
-                };
-
-                Value::Enumeration(Enum::Tuple(
-                    (new_ref!(ValueType, ty.to_owned()), "Result".to_owned()),
-                    new_ref!(TupleEnum<Value>, tuple),
-                ))
-            }
-            FfiValue::String(str_) => Self::String(str_.into()),
-            FfiValue::Struct(struct_) => Self::Struct(struct_.into()),
-            FfiValue::Uuid(uuid) => Self::Uuid(uuid.into()),
-            _ => panic!("Unexpected FfiValue: {ffi_value:?}."),
-        }
     }
 }
 

@@ -12,6 +12,7 @@ use dwarf::{
     bubba::error::BubbaError,
     chacha::ffi_value::FfiValue,
     plug_in::{Error, LambdaCall, Plugin, PluginModRef, PluginModule, PluginType, Plugin_TO},
+    DwarfFloat, DwarfInteger,
 };
 
 #[export_root_module]
@@ -65,7 +66,7 @@ mod test_ffi {
 
     impl Plugin for TestFfi {
         fn name(&self) -> RStr<'_> {
-            "Md".into()
+            "TestFfi".into()
         }
 
         #[tracing::instrument]
@@ -79,7 +80,27 @@ mod test_ffi {
             match ty.as_str() {
                 "TestFfi" => match func.as_str() {
                     "test_bool" => {
-                        let arg: bool = match args
+                        let FfiValue::Boolean(b) = args.get(0).unwrap() else {
+                            return RErr(Error::Plugin("Invalid boolean".into()));
+                        };
+
+                        Ok(FfiValue::Boolean(*b))
+                    }
+                    "test_empty" => {
+                        let _arg: () = match args
+                            .get(0)
+                            .unwrap()
+                            .try_into()
+                            .map_err(|e: BubbaError| Error::Plugin(e.to_string().into()))
+                        {
+                            Ok(b) => b,
+                            Err(e) => return RErr(e),
+                        };
+
+                        Ok(FfiValue::Empty)
+                    }
+                    "test_float" => {
+                        let arg: DwarfFloat = match args
                             .first()
                             .unwrap()
                             .try_into()
@@ -89,7 +110,28 @@ mod test_ffi {
                             Err(e) => return RErr(e),
                         };
 
-                        Ok(FfiValue::Boolean(arg).into())
+                        Ok(FfiValue::Float(arg))
+                    }
+                    "test_integer" => {
+                        let FfiValue::Integer(number) = args.get(0).unwrap() else {
+                            return RErr(Error::Plugin("Invalid integer".into()));
+                        };
+
+                        Ok(FfiValue::Integer(*number as i64))
+                    }
+                    "test_lambda" => {
+                        let FfiValue::Lambda(number) = args.get(0).unwrap() else {
+                            return RErr(Error::Plugin("Invalid lambda".into()));
+                        };
+
+                        Ok(FfiValue::Lambda(*number as usize))
+                    }
+                    "test_list" => {
+                        let FfiValue::List(ty, list) = args.get(0).unwrap() else {
+                            return RErr(Error::Plugin("Invalid list".into()));
+                        };
+
+                        Ok(FfiValue::List(ty.clone(), list.clone()))
                     }
                     func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                 },

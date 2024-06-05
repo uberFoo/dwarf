@@ -17,4 +17,24 @@ impl TestFfi {
         self.inner
             .invoke_func("test_ffi", "TestFfi", "test_bool", [b])
     }
+
+    fn test_empty(self) -> () {
+        self.inner
+            .invoke_func("test_ffi", "TestFfi", "test_empty", [()])
+    }
+
+    fn test_float(self, f: float) -> float {
+        self.inner
+            .invoke_func("test_ffi", "TestFfi", "test_float", [f])
+    }
+
+    fn test_integer(self, i: int) -> int {
+        self.inner
+            .invoke_func("test_ffi", "TestFfi", "test_integer", [i])
+    }
+
+    fn test_list(self, l: [int]) -> [int] {
+        self.inner
+            .invoke_func("test_ffi", "TestFfi", "test_list", [l])
+    }
 }

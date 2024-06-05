@@ -5,7 +5,7 @@ use std::{
 };
 
 use abi_stable::{
-    std_types::{RBox, RHashMap, ROption, RResult, RString, RVec, Tuple2},
+    std_types::{RBox, RHashMap, RNone, ROption, RResult, RSome, RString, RVec, Tuple2},
     StableAbi,
 };
 use ansi_term::Colour;
@@ -15,12 +15,12 @@ use uuid::Uuid;
 
 use crate::{
     bubba::{
-        error::{BubbaError, Error, Result},
+        error::{BubbaError, Result},
         value::Value,
     },
     chacha::{
         value::_struct::StructAttributes,
-        value::{Enum, Struct},
+        value::{Enum, Struct, TupleEnum},
     },
     keywords::{ERR, OK, RESULT_TYPE},
     lu_dog::{ValueType, ValueTypeEnum},
@@ -89,7 +89,7 @@ pub enum FfiValue {
     /// List
     ///
     /// A list of values; aka a Vec.
-    List(RVec<Self>),
+    List(ROption<FfiValueType>, RVec<Self>),
     Map(FfiHashMap),
     /// Option
     ///
@@ -143,7 +143,7 @@ impl std::fmt::Display for FfiValue {
             Self::Float(num) => write!(f, "{num}"),
             Self::Integer(num) => write!(f, "{num}"),
             Self::Lambda(n) => write!(f, "lambda {n}"),
-            Self::List(vec) => {
+            Self::List(_, vec) => {
                 let mut first_time = true;
                 write!(f, "[")?;
                 for i in vec {
@@ -294,10 +294,12 @@ impl From<Value> for FfiValue {
 
                 Self::Lambda(key)
             }
-            Value::List { ty: _, inner } => {
+            Value::List { ty, inner } => {
+                let ty = s_read!(ty);
+                let ty: FfiValueType = ty.clone().into();
                 let inner = s_read!(inner);
                 let inner = inner.iter().map(|v| s_read!(v).clone().into()).collect();
-                Self::List(inner)
+                Self::List(RSome(ty), inner)
             }
             Value::Integer(num) => Self::Integer(num.to_owned()),
             Value::Plugin((_name, plugin)) => Self::PlugIn(s_read!(plugin).clone()),
@@ -343,6 +345,86 @@ impl From<FfiValue> for Value {
     }
 }
 
+impl From<(FfiValue, &Value)> for Value {
+    fn from((ffi_value, ty): (FfiValue, &Value)) -> Self {
+        match ffi_value {
+            FfiValue::Boolean(bool_) => Self::Boolean(bool_),
+            FfiValue::Empty => Self::Empty,
+            // FfiValue::Error(e) => Self::Error(),
+            FfiValue::Float(num) => Self::Float(num),
+            FfiValue::Integer(num) => Self::Integer(num),
+            FfiValue::List(ty, list) => {
+                let vec: Vec<_> = list
+                    .into_iter()
+                    .map(|v| new_ref!(Value, v.into()))
+                    .collect();
+                let list = std::sync::Arc::new(std::sync::RwLock::new(vec));
+                if let RSome(ty) = ty {
+                    Self::List {
+                        ty: new_ref!(ValueType, ty.into()),
+                        inner: list,
+                    }
+                } else {
+                    Self::AnyList(list)
+                }
+            }
+            FfiValue::Map(map) => {
+                let map: StdHashMap<String, _> = map
+                    .0
+                    .into_iter()
+                    .map(|Tuple2(k, v)| (k.into(), new_ref!(Value, v.into())))
+                    .collect();
+                let map = std::sync::Arc::new(std::sync::RwLock::new(map));
+                Self::Map { inner: map }
+            }
+            FfiValue::Option(option) => match option {
+                ROption::RNone => Self::Empty,
+                ROption::RSome(value) => {
+                    <(FfiValue, &Value) as Into<Value>>::into((RBox::into_inner(value), ty))
+                }
+            },
+            // FfiValue::ProxyType(plugin) => Self::ProxyType {
+            //     module: plugin.module.into(),
+            //     obj_ty: plugin.ty.into(),
+            //     id: plugin.id.into(),
+            //     plugin: new_ref!(PluginType, plugin.plugin),
+            // },
+            FfiValue::Range(range) => Self::Range(range.start..range.end),
+            FfiValue::Result(result) => {
+                let tuple = match result {
+                    RResult::RErr(err) => TupleEnum {
+                        variant: "Err".to_owned(),
+                        value: new_ref!(
+                            Value,
+                            <(FfiValue, &Value) as Into<Value>>::into((RBox::into_inner(err), ty))
+                        ),
+                    },
+                    RResult::ROk(ok) => TupleEnum {
+                        variant: "Ok".to_owned(),
+                        value: new_ref!(
+                            Value,
+                            <(FfiValue, &Value) as Into<Value>>::into((RBox::into_inner(ok), ty))
+                        ),
+                    },
+                };
+
+                let Value::ValueType(ty) = ty else {
+                    unreachable!()
+                };
+
+                Value::Enumeration(Enum::Tuple(
+                    (new_ref!(ValueType, ty.to_owned()), "Result".to_owned()),
+                    new_ref!(TupleEnum<Value>, tuple),
+                ))
+            }
+            FfiValue::String(str_) => Self::String(str_.into()),
+            FfiValue::Struct(struct_) => Self::Struct(struct_.into()),
+            FfiValue::Uuid(uuid) => Self::Uuid(uuid.into()),
+            _ => panic!("Unexpected FfiValue: {ffi_value:?}."),
+        }
+    }
+}
+
 impl<V> TryFrom<&FfiValue> for StdHashMap<String, V>
 where
     V: TryFrom<FfiValue, Error = BubbaError>,
@@ -379,7 +461,7 @@ impl<T: TryFrom<FfiValue, Error = BubbaError> + std::fmt::Debug> TryFrom<&FfiVal
 
     fn try_from(value: &FfiValue) -> Result<Self, Self::Error> {
         match value.clone() {
-            FfiValue::List(vec) => {
+            FfiValue::List(_, vec) => {
                 let result: Result<Vec<_>, _> = vec.into_iter().map(|v| v.try_into()).collect();
                 result.map_err(|_| BubbaError::Conversion {
                     src: value.to_string(),
@@ -404,7 +486,7 @@ impl<T: Into<FfiValue>> From<Vec<T>> for FfiValue {
             .into_iter()
             .map(|v| v.into())
             .collect::<RVec<FfiValue>>();
-        FfiValue::List(vec)
+        FfiValue::List(RNone, vec)
     }
 }
 
@@ -474,12 +556,29 @@ impl TryFrom<&FfiValue> for String {
     }
 }
 
-impl TryFrom<&FfiValue> for i64 {
+impl TryFrom<&FfiValue> for DwarfInteger {
     type Error = BubbaError;
 
     fn try_from(value: &FfiValue) -> Result<Self, Self::Error> {
         match value {
             FfiValue::Integer(i) => Ok(*i),
+            _ => Err(BubbaError::Conversion {
+                src: value.to_string(),
+                dst: "i64".to_owned(),
+                location: location!(),
+                backtrace: Backtrace::capture(),
+            }
+            .into()),
+        }
+    }
+}
+
+impl TryFrom<&FfiValue> for DwarfFloat {
+    type Error = BubbaError;
+
+    fn try_from(value: &FfiValue) -> Result<Self, Self::Error> {
+        match value {
+            FfiValue::Float(f) => Ok(*f),
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "i64".to_owned(),
@@ -497,6 +596,23 @@ impl TryFrom<&FfiValue> for bool {
     fn try_from(value: &FfiValue) -> Result<Self, Self::Error> {
         match value {
             FfiValue::Boolean(b) => Ok(*b),
+            _ => Err(BubbaError::Conversion {
+                src: value.to_string(),
+                dst: "i64".to_owned(),
+                location: location!(),
+                backtrace: Backtrace::capture(),
+            }
+            .into()),
+        }
+    }
+}
+
+impl TryFrom<&FfiValue> for () {
+    type Error = BubbaError;
+
+    fn try_from(value: &FfiValue) -> Result<Self, Self::Error> {
+        match value {
+            FfiValue::Empty => Ok(()),
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "i64".to_owned(),
@@ -614,6 +730,16 @@ impl From<&ValueType> for FfiValueType {
     fn from(value: &ValueType) -> Self {
         Self {
             subtype: value.subtype.clone().into(),
+            bogus: value.bogus,
+            id: value.id,
+        }
+    }
+}
+
+impl From<ValueType> for FfiValueType {
+    fn from(value: ValueType) -> Self {
+        Self {
+            subtype: value.subtype.into(),
             bogus: value.bogus,
             id: value.id,
         }

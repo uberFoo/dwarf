@@ -5,4 +5,14 @@ fn main() {
 
     chacha::assert(ffi.test_bool(true));
     chacha::assert(!ffi.test_bool(false));
+    chacha::assert_eq(ffi.test_empty(), ());
+    chacha::assert_eq(ffi.test_float(42.0), 42.0);
+    chacha::assert_eq(ffi.test_integer(42), 42);
+    let test = ffi.test_list([1, 2, 3]);
+    print("test ${test}\n");
+    print("${chacha::type_of(test)}\n");
+    let ground_truth = [1, 2, 3];
+    print("ground_truth ${ground_truth}\n");
+    print("${chacha::type_of(ground_truth}\n");
+    chacha::assert_eq(test, ground_truth);
 }

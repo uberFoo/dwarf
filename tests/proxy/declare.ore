@@ -11,7 +11,7 @@ fn main() {
         name: "Gandalf",
         description: "A wandering wizard",
     };
-    print("${object}\n");
+    print("object ${object}\n");
     // print("{0}\n".format(object));
 
     // This fails, and well done. We don't want this to be constructable.
@@ -19,10 +19,11 @@ fn main() {
 
     // We create a new store.
     let store = SarzakStore::new();
-    print("${store}\n");
+    print("store ${store}\n");
 
     // And use it here to create an object. This will be saved in the store.
     let gandalf = Object::new("A wandering wizard", "ᚠ", "Gandalf");
+    print("gandalf ${gandalf}\n");
     let merlin = Object::new("Magician of Camelot", "M", "Merlin");
 
     chacha::assert_eq(gandalf.name, "Gandalf");
@@ -47,7 +48,7 @@ fn main() {
         }
     }
 
-    Object::help();
+    // Object::help();
 
     // let merlin = MerlinStore::new();
 
