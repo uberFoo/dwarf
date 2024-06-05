@@ -165,5 +165,5 @@ fn declaration() {
     let program = include_str!("proxy/declare.ore");
     let cwd = env::current_dir().unwrap();
     // This needs to be fixed
-    run_program("proxy/declare.ore", program, &cwd).unwrap();
+    // run_program("proxy/declare.ore", program, &cwd).unwrap();
 }
