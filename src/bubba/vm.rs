@@ -2100,6 +2100,7 @@ impl VM {
                 }
             }
         };
+
         let worker = executor.new_worker();
         let child_task = worker.create_task(future).unwrap();
 

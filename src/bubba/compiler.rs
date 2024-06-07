@@ -646,6 +646,13 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
             let object_name = object_name.to_upper_camel_case();
 
             dbg!(func_name, object_name);
+            thonk.insert_instruction(
+                Instruction::Push("External Implementation Not Working".into()),
+                location!(),
+            );
+            thonk.insert_instruction(Instruction::Push((0..0).into()), location!());
+
+            thonk.insert_instruction(Instruction::HaltAndCatchFire, location!());
         }
     };
 

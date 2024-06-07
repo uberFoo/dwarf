@@ -56,6 +56,12 @@ pub(in crate::bubba::compiler) fn compile(
 
             Ok(ty)
         } else {
+            thonk.insert_instruction(
+                Instruction::Push("Empty function body.".into()),
+                location!(),
+            );
+            thonk.insert_instruction(Instruction::Push((0..0).into()), location!());
+            thonk.insert_instruction(Instruction::HaltAndCatchFire, location!());
             Ok(Some(empty))
         }
     } else {
@@ -79,6 +85,12 @@ pub(in crate::bubba::compiler) fn compile(
 
             Ok(ty)
         } else {
+            thonk.insert_instruction(
+                Instruction::Push("Empty function body.".into()),
+                location!(),
+            );
+            thonk.insert_instruction(Instruction::Push((0..0).into()), location!());
+            thonk.insert_instruction(Instruction::HaltAndCatchFire, location!());
             Ok(Some(empty))
         }
     }
