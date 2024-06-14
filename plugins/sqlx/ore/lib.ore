@@ -304,10 +304,8 @@ struct Query<T> {
     // func: fn(Row) -> T,
     pool: int,
     /// The bindings for the query.
-    ///
-    /// This should be a heterogenous list -- it works as is though, which is scary.
-    /// It's not a heterogenous list because dwarf doesn't support that as a type yet.
     bindings: [string],
+    /// The type of each binding.
     binding_types: [Type]
 }
 

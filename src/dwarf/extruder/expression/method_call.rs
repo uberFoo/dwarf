@@ -122,7 +122,7 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
         PrintableValueType(true, &instance_ty, context, lu_dog).to_string()
     );
     let ty = match s_read!(instance_ty).subtype {
-        ValueTypeEnum::AnyList(ref list) => match method.as_str() {
+        ValueTypeEnum::AnyList(_) => match method.as_str() {
             JOIN => {
                 let ty = Ty::new_z_string(context.sarzak);
                 ValueType::new_ty(true, &ty, lu_dog)

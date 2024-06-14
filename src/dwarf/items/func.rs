@@ -137,12 +137,7 @@ pub fn inter_func(
             Some(re) => re,
             None => {
                 let re = Regex::new(EXTRACT_GENERICS_RE).unwrap();
-                match EXTRACT_GENERICS.set(re) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        // panic!("Failed to set RE: {}", e);
-                    }
-                }
+                let _ = EXTRACT_GENERICS.set(re);
                 EXTRACT_GENERICS.get().unwrap()
             }
         };

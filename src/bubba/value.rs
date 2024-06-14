@@ -165,7 +165,7 @@ impl Value {
                 }
                 write!(f, "] }}")
             }
-            Self::List { ty, inner } => {
+            Self::List { inner, .. } => {
                 let inner = s_read!(inner);
                 let mut first_time = true;
                 write!(f, "[")?;

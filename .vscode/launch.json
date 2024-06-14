@@ -142,7 +142,8 @@
                 }
             },
             "args": [
-                "tests/harness/extensions/test_ffi/test.ore"
+                "test.ore",
+                // "tests/harness/extensions/test_ffi/test.ore"
                 // "tests/proxy/declare.ore",
                 // "tests/vm_harness/types/map/get.ore",
                 // "tests/vm_harness/lambda.ore"

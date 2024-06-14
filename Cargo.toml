@@ -114,13 +114,14 @@ dotenvy = "0.15.7"
 # [patch.crates-io]
 # puteketeke = { path = "../../github/puteketeke" }
 
-[patch."https://github.com/uberFoo/sarzak"]
-sarzak = { path = "../sarzak" }
+# [patch."https://github.com/uberFoo/sarzak"]
+# sarzak = { path = "../sarzak" }
 
 [dev-dependencies]
 backtrace = "0.3.67"
 criterion = { version = "0.5.1", features = ["html_reports"] }
 diff = "0.1.13"
+itertools = "0.13.0"
 
 [build-dependencies]
 chrono = "0.4.31"

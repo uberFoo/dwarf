@@ -1,4 +1,9 @@
-use std::{fs, ops::Range, path::PathBuf};
+use std::{
+    fs,
+    hash::{DefaultHasher, Hash, Hasher},
+    ops::Range,
+    path::{Path, PathBuf},
+};
 
 use ansi_term::Colour;
 use heck::ToUpperCamelCase;
@@ -505,6 +510,7 @@ fn walk_tree(
     let mut implementations = Vec::new();
     let mut structs = Vec::new();
     let mut enums = Vec::new();
+    let mut errors = Vec::new();
 
     // We need the structs before the impls. We also need function signatures.
     // So we walk the tree and cache what we find so that we may then inter
@@ -630,8 +636,6 @@ fn walk_tree(
             }
         }
     }
-
-    let mut errors = Vec::new();
     // Put the type information in first.
     // This first pass over the structs just records the name, but not the fields.
     // We wait until we've seen all of the structs to do that. This allows us to
@@ -3374,7 +3378,6 @@ pub(super) fn inter_expression(
             Ok(((expr, span), lhs_ty))
         }
         道 => {
-            let source = &s_read!(context.source).source;
             let span = s_read!(span).start as usize..s_read!(span).end as usize;
             Err(vec![DwarfError::NoImplementation {
                 missing: format!("inter_expression: {:?}", 道),
@@ -3429,11 +3432,50 @@ fn inter_module(
     path.set_file_name(name);
     path.set_extension(ORE_EXT);
 
+    let mut hasher = DefaultHasher::new();
+    path.hash(&mut hasher);
+    let hash = hasher.finish();
+
+    // let load_path = format!(
+    //     "{}/extruded/{}_{}.lu_dog",
+    //     context.dwarf_home.display(),
+    //     hash,
+    //     path.file_name().unwrap().to_str().unwrap()
+    // );
+
     if !context.imports.insert(path.clone()) {
         debug!("{name} already imported");
+        // let loaded_lu_dog = LuDogStore::load_bincode(load_path).map_err(|e| {
+        //     errors.push(DwarfError::File {
+        //         description: "Attempting to load lu_dog".to_owned(),
+        //         path: path,
+        //         source: e,
+        //         location: location!(),
+        //     });
+        //     errors
+        // })?;
+
+        // lu_dog.merge(&loaded_lu_dog);
         return Ok(());
     }
 
+    // let load_path_path = Path::new(&load_path);
+
+    // if load_path_path.exists() {
+    //     let loaded_lu_dog = LuDogStore::load_bincode(load_path).map_err(|e| {
+    //         errors.push(DwarfError::File {
+    //             description: "Attempting to load lu_dog".to_owned(),
+    //             path: path,
+    //             source: e,
+    //             location: location!(),
+    //         });
+    //         errors
+    //     })?;
+
+    //     lu_dog.merge(&loaded_lu_dog);
+
+    //     return Ok(());
+    // } else {
     if !context.silent {
         println!("\n{} {}", Colour::Green.paint("Extruding:"), path.display());
     }
@@ -3444,6 +3486,7 @@ fn inter_module(
             match parse_dwarf(path.to_str().unwrap(), &source_code) {
                 Ok(ast) => {
                     let path_name = format!("{}", path.display());
+                    // let mut new_lu_dog = lu_dog.clone();
 
                     // Here we are creating a path that includes the name of the module.
                     // This is the context.path of the new context used to walk the tree.
@@ -3465,6 +3508,7 @@ fn inter_module(
                         context.models,
                         &mut dirty,
                         location!(),
+                        // &mut new_lu_dog,
                         lu_dog,
                         type_path,
                         &mut scopes,
@@ -3475,8 +3519,32 @@ fn inter_module(
 
                     // Extrusion time
                     trace!("processing dwarf import");
+                    // walk_tree(&ast, &mut new_ctx, import_stack, &mut new_lu_dog)?;
                     walk_tree(&ast, &mut new_ctx, import_stack, lu_dog)?;
                     trace!("done processing dwarf import");
+
+                    // let module_path = format!(
+                    //     "{}/extruded/{}_{}.lu_dog",
+                    //     context.dwarf_home.display(),
+                    //     hash,
+                    //     path.file_name().unwrap().to_str().unwrap()
+                    // );
+
+                    // dbg!(&module_path);
+
+                    // new_lu_dog.persist_bincode(module_path).unwrap();
+
+                    // new_lu_dog.persist_bincode(persist_path).map_err(|e| {
+                    //     errors.push(DwarfError::File {
+                    //         description: "Attempting to persist lu_dog".to_owned(),
+                    //         path: path,
+                    //         source: e,
+                    //         location: location!(),
+                    //     });
+                    //     errors
+                    // })?;
+
+                    // lu_dog.merge(&new_lu_dog);
 
                     context.dirty.extend(dirty);
                 }
@@ -3494,6 +3562,7 @@ fn inter_module(
             });
         }
     }
+    // }
 
     if errors.is_empty() {
         Ok(())
@@ -3596,7 +3665,7 @@ fn inter_import(
     // thing on the top of the stack.
     let fq_type = type_root.clone() + &ty;
 
-    if let Some(t) = context.types.get(&fq_type) {
+    if let Some(_) = context.types.get(&fq_type) {
         debug!("{fq_type} already imported");
         return Ok(());
     } else {
@@ -4611,7 +4680,7 @@ pub(super) fn typecheck(
             // }
         }
         (ValueTypeEnum::StructGeneric(g), _) => {
-            let g = lu_dog.exhume_struct_generic(g).unwrap();
+            let _g = lu_dog.exhume_struct_generic(g).unwrap();
             // let ty = s_read!(g).r99_value_type(lu_dog);
             // dbg!(&ty, "a");
             let a = PrintableValueType(true, lhs, context, lu_dog);
@@ -4635,11 +4704,11 @@ pub(super) fn typecheck(
             // }
         }
         (_, ValueTypeEnum::StructGeneric(g)) => {
-            let g = lu_dog.exhume_struct_generic(g).unwrap();
+            let _g = lu_dog.exhume_struct_generic(g).unwrap();
             // let ty = s_read!(g).r99_value_type(lu_dog);
             // dbg!(&ty, "b");
-            let a = PrintableValueType(true, lhs, context, lu_dog);
-            let b = PrintableValueType(true, rhs, context, lu_dog);
+            // let a = PrintableValueType(true, lhs, context, lu_dog);
+            // let b = PrintableValueType(true, rhs, context, lu_dog);
 
             // if !ty.is_empty() {
             //     typecheck(

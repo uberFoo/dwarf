@@ -7,26 +7,15 @@ use std::{
     thread,
 };
 
-#[cfg(feature = "async")]
-use futures_lite::future;
-
-// #[cfg(feature = "async")]
-// use dwarf::chacha::interpreter::Executor;
-
 use clap::{ArgAction, Args, Parser};
 use dap::{prelude::BasicClient, server::Server};
 use dotenvy::dotenv;
 
-// #[cfg(feature = "async")]
-// use smol::future;
 #[cfg(feature = "async")]
 use tracing_subscriber::{
     fmt::{self, format},
     EnvFilter, FmtSubscriber,
 };
-
-#[cfg(feature = "async")]
-use dwarf::ref_to_inner;
 
 use dwarf::{
     bubba::{
@@ -313,7 +302,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Running in the VM
             //
             // We will check $DWARF_HOME/compiled for a file named according to:
-            //      [hash(path_to_source)]_source_name.[ore|tao|*].gp
+            //      [hash(path_to_source)]_source_name.[ore|tao].gp
             // If we find it, we will compare timestamps, and recompile if the
             // source is newer than the gp file. Otherwise we'll just load the
             // file and go.

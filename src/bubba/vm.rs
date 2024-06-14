@@ -753,6 +753,7 @@ impl VM {
                         #[cfg(feature = "tracy-client")]
                         let _span = span!("CreateTask");
 
+                        // Create a task in the paused state.
                         self.start_task(false, &mut stack, *func_arity, arity, &program)?;
 
                         1
@@ -2189,6 +2190,7 @@ mod tests {
         let mut thonk = Thonk::new("test".to_string());
 
         thonk.add_instruction(Instruction::Push(42.into()), None);
+        thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
 
         let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
@@ -2208,7 +2210,7 @@ mod tests {
         println!("{:?}", result);
         println!("{:?}", vm);
 
-        assert!(result.is_err());
+        assert!(result.is_ok());
     }
 
     #[test]

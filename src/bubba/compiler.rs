@@ -632,14 +632,14 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
         BodyEnum::ExternalImplementation(ref block_id) => {
             let external = lu_dog.exhume_external_implementation(block_id).unwrap();
             let external = s_read!(external);
-            let model_name = external.x_model.clone();
-            let model_name = if model_name == MERLIN {
-                SARZAK.to_owned()
-            } else {
-                model_name
-            };
-            let models = &context.extruder_context.models;
-            let model = models.get(&model_name).unwrap();
+            // let model_name = external.x_model.clone();
+            // let model_name = if model_name == MERLIN {
+            //     SARZAK.to_owned()
+            // } else {
+            //     model_name
+            // };
+            // let models = &context.extruder_context.models;
+            // let model = models.get(&model_name).unwrap();
             let func_name = external.function.clone();
 
             let object_name = &external.object;
@@ -810,7 +810,7 @@ mod test {
 
     use crate::{
         bubba::{error::Error, VM},
-        dwarf::{new_lu_dog, parse_dwarf},
+        dwarf::{error::DwarfErrorReporter, new_lu_dog, parse_dwarf},
         sarzak::MODEL as SARZAK_MODEL,
         RefType,
     };
@@ -981,11 +981,12 @@ mod test {
     }
 
     #[test]
-    fn use_std_option() {
+    fn use_std_option() -> Result<(), String> {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    use std::option::Option;
+
                    fn main() -> bool {
                        let foo = Option::Some(1);
                        chacha::assert(foo.is_some());
@@ -1006,7 +1007,12 @@ mod test {
             true,
             &sarzak,
         )
-        .unwrap();
+        .map_err(|e| {
+            for e in e {
+                eprintln!("{}", DwarfErrorReporter(&e, true))
+            }
+            "Test failed."
+        })?;
         let program = compile(&ctx, true).unwrap();
         println!("{program}");
         // assert_eq!(program.get_thonk_card(), 5);
@@ -1016,6 +1022,8 @@ mod test {
         eprintln!("{:?}", run);
         assert!(run.is_ok());
         assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
+
+        Ok(())
     }
 
     #[test]
