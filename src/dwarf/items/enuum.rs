@@ -34,7 +34,7 @@ pub fn inter_enum(
     name: &Spanned<String>,
     _attributes: &AttributeMap,
     variants: &[(Spanned<String>, Option<EnumField>)],
-    enum_generics: Option<&HashMap<String, Type>>,
+    enum_generics: Option<&Vec<(String, Type)>>,
     context: &mut Context,
     import_stack: &mut Vec<String>,
     lu_dog: &mut LuDogStore,
@@ -67,7 +67,8 @@ pub fn inter_enum(
     let mut first_generic = None;
     let mut last_generic_uuid: Option<SarzakStorePtr> = None;
     if let Some(generics) = enum_generics {
-        for name in generics.keys() {
+        for generic in generics.iter() {
+            let name = &generic.0;
             let generic =
                 EnumGeneric::new(Uuid::new_v4(), name.to_owned(), &woog_enum, None, lu_dog);
             let ty = ValueType::new_enum_generic(true, &generic, lu_dog);

@@ -209,7 +209,7 @@ struct ConveyFunc<'a> {
     span: &'a Span,
     params: &'a [(Spanned<String>, Spanned<Type>)],
     return_type: &'a Spanned<Type>,
-    generics: Option<HashMap<String, Type>>,
+    generics: Option<Vec<(String, Type)>>,
     statements: Option<&'a Spanned<ParserExpression>>,
 }
 
@@ -222,7 +222,7 @@ impl<'a> ConveyFunc<'a> {
         span: &'a Span,
         params: &'a [(Spanned<String>, Spanned<Type>)],
         return_type: &'a Spanned<Type>,
-        generics: Option<HashMap<String, Type>>,
+        generics: Option<Vec<(String, Type)>>,
         statements: Option<&'a Spanned<ParserExpression>>,
     ) -> Self {
         Self {
@@ -243,7 +243,7 @@ struct ConveyStruct<'a> {
     span: &'a Span,
     attributes: &'a AttributeMap,
     fields: &'a [(Spanned<String>, Spanned<Type>, AttributeMap)],
-    generics: Option<HashMap<String, Type>>,
+    generics: Option<Vec<(String, Type)>>,
 }
 
 impl<'a> ConveyStruct<'a> {
@@ -252,7 +252,7 @@ impl<'a> ConveyStruct<'a> {
         span: &'a Span,
         attributes: &'a AttributeMap,
         fields: &'a [(Spanned<String>, Spanned<Type>, AttributeMap)],
-        generics: Option<HashMap<String, Type>>,
+        generics: Option<Vec<(String, Type)>>,
     ) -> Self {
         Self {
             name,
@@ -268,7 +268,7 @@ struct ConveyEnum<'a> {
     name: &'a Spanned<String>,
     attributes: &'a AttributeMap,
     fields: &'a [(Spanned<String>, Option<EnumField>)],
-    generics: Option<HashMap<String, Type>>,
+    generics: Option<Vec<(String, Type)>>,
 }
 
 impl<'a> ConveyEnum<'a> {
@@ -276,7 +276,7 @@ impl<'a> ConveyEnum<'a> {
         name: &'a Spanned<String>,
         attributes: &'a AttributeMap,
         fields: &'a [(Spanned<String>, Option<EnumField>)],
-        generics: Option<HashMap<String, Type>>,
+        generics: Option<Vec<(String, Type)>>,
     ) -> Self {
         Self {
             name,
@@ -310,7 +310,7 @@ pub struct StructFields {
     pub woog_struct: RefType<WoogStruct>,
     pub fields: Vec<(Spanned<String>, Spanned<Type>, AttributeMap)>,
     // I'd really like to keep this as a reference, rather than cloning it.
-    pub generics: Option<HashMap<String, Type>>,
+    pub generics: Option<Vec<(String, Type)>>,
     pub location: Location,
 }
 
@@ -4841,6 +4841,8 @@ pub(super) fn typecheck(
             let b = lu_dog.exhume_woog_struct(rhs_id).unwrap();
             let a = s_read!(a);
             let b = s_read!(b);
+
+            dbg!(&a.name, &b.name);
 
             // We really need to check the generics, and we need to do it
             // recursively so that inner types are checked. If one side is

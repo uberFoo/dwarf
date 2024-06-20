@@ -75,7 +75,7 @@ puteketeke = { version = "0.0.5", optional = true }
 ratatui = { git = "https://github.com/uberFoo/ratatui", optional = true }
 regex = "1.10.3"
 reqwest = { version = "0.12.5", features = ["blocking", "rustls-tls"] }
-rustc-hash = "1.1.0"
+rustc-hash = "2.0.0"
 rustyline = { version = "13.0.0", optional = true, features = [
     "derive",
     "with-file-history",

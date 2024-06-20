@@ -1028,7 +1028,7 @@ dependencies = [
  "puteketeke",
  "regex",
  "reqwest",
- "rustc-hash 1.1.0",
+ "rustc-hash 2.0.0",
  "rustyline",
  "sarzak",
  "serde",

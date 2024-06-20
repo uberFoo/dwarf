@@ -37,7 +37,7 @@ pub fn inter_struct(
     span: &Span,
     attributes: &AttributeMap,
     fields: &[(Spanned<String>, Spanned<Type>, AttributeMap)],
-    generics: Option<&HashMap<String, Type>>,
+    generics: Option<&Vec<(String, Type)>>,
     context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
@@ -243,9 +243,10 @@ pub fn inter_struct(
                     let mut first_generic = None;
                     let mut last_generic_uuid: Option<SarzakStorePtr> = None;
                     if let Some(generics) = generics {
-                        for generic in generics.keys() {
+                        for generic in generics.iter() {
+                            let name = &generic.0;
                             let generic =
-                                StructGeneric::new(generic.to_owned(), None, &woog_struct, lu_dog);
+                                StructGeneric::new(name.to_owned(), None, &woog_struct, lu_dog);
                             if first {
                                 first = false;
                                 first_generic = Some(s_read!(generic).id);
@@ -298,8 +299,9 @@ pub fn inter_struct(
         let mut first_generic = None;
         let mut last_generic_uuid: Option<SarzakStorePtr> = None;
         if let Some(generics) = generics {
-            for generic in generics.keys() {
-                let generic = StructGeneric::new(generic.to_owned(), None, &woog_struct, lu_dog);
+            for generic in generics.iter() {
+                let name = &generic.0;
+                let generic = StructGeneric::new(name.to_owned(), None, &woog_struct, lu_dog);
                 if first {
                     first = false;
                     first_generic = Some(s_read!(generic).id);
@@ -326,7 +328,7 @@ pub fn inter_struct(
 pub fn inter_struct_fields(
     woog_struct: RefType<WoogStruct>,
     fields: &[(Spanned<String>, Spanned<Type>, AttributeMap)],
-    generics: Option<&HashMap<String, Type>>,
+    generics: Option<&Vec<(String, Type)>>,
     location: Location,
     context: &mut Context,
     import_stack: &mut Vec<String>,
@@ -416,6 +418,7 @@ pub fn inter_struct_fields(
 
         let type_str = type_.to_string();
         let ty = if let Some(generics) = generics {
+            let generics: HashMap<&String, &Type> = generics.iter().map(|(k, v)| (k, v)).collect();
             if let Some(_definition_type) = generics.get(&type_str) {
                 // 🚧 kts -- this thing doesn't have it's next sorted, and that
                 // can't be right.

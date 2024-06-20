@@ -43,7 +43,7 @@ pub fn inter_func(
     attributes: &AttributeMap,
     params: &[(Spanned<String>, Spanned<Type>)],
     return_type: &Spanned<Type>,
-    generics: Option<&HashMap<String, Type>>,
+    generics: Option<&Vec<(String, Type)>>,
     stmts: Option<&Spanned<ParserExpression>>,
     impl_block: Option<&RefType<ImplementationBlock>>,
     impl_ty: Option<&RefType<ValueType>>,
@@ -130,6 +130,8 @@ pub fn inter_func(
     let ret_span = &return_type.1;
     let ret_ty = if let Some(generics) = generics {
         context.generics = generics.iter().map(|(_, v)| (v.clone(), 0..0)).collect();
+        let generics: HashMap<&str, &Type> =
+            generics.iter().map(|(k, v)| (k.as_str(), v)).collect();
 
         let type_str = return_type.0.to_string();
 
@@ -170,7 +172,7 @@ pub fn inter_func(
             let ty = make_value_type(&ty, ret_span, impl_ty, context, import_stack, lu_dog)?;
 
             ty
-        } else if generics.get(&type_str).is_some() {
+        } else if generics.get(type_str.as_str()).is_some() {
             let g = FuncGeneric::new(type_str, None, None, lu_dog);
             let ty = ValueType::new_func_generic(true, &g, lu_dog);
             LuDogSpan::new(
@@ -292,7 +294,10 @@ pub fn inter_func(
         //
         let type_str = param_ty.to_string();
         let param_ty = if let Some(generics) = generics {
-            if generics.get(&type_str).is_some() {
+            let generics: HashMap<&str, &Type> =
+                generics.iter().map(|(k, v)| (k.as_str(), v)).collect();
+
+            if generics.get(type_str.as_str()).is_some() {
                 let g = FuncGeneric::new(type_str, None, None, lu_dog);
                 ValueType::new_func_generic(true, &g, lu_dog)
             } else {
@@ -396,7 +401,7 @@ pub fn inter_func(
 pub fn parse_func_signature(
     name: &str,
     params: &[(Spanned<String>, Spanned<Type>)],
-    generics: Option<&HashMap<String, Type>>,
+    generics: Option<&Vec<(String, Type)>>,
     return_type: &Spanned<Type>,
     impl_ty: Option<&RefType<ValueType>>,
     context: &mut Context,
@@ -408,6 +413,7 @@ pub fn parse_func_signature(
     let type_str = return_type.0.to_string();
     let span = &return_type.1;
     let ret_ty = if let Some(generics) = generics {
+        let generics: HashMap<&String, &Type> = generics.iter().map(|(k, v)| (k, v)).collect();
         if generics.get(&type_str).is_some() {
             let g = FuncGeneric::new(type_str, None, None, lu_dog);
             let ty = ValueType::new_func_generic(true, &g, lu_dog);
@@ -435,6 +441,7 @@ pub fn parse_func_signature(
         let type_str = param_ty.to_string();
         let span = ty_span;
         let param_ty = if let Some(generics) = generics {
+            let generics: HashMap<&String, &Type> = generics.iter().map(|(k, v)| (k, v)).collect();
             if generics.get(&type_str).is_some() {
                 let g = FuncGeneric::new(type_str, None, None, lu_dog);
                 ValueType::new_func_generic(true, &g, lu_dog)
