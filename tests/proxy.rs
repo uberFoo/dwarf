@@ -14,6 +14,7 @@ use dwarf::{
 #[cfg(feature = "tracy")]
 use tracy_client::Client;
 
+#[cfg(feature = "async")]
 const NUM_THREADS: usize = 4;
 
 fn run_program(test: &str, program: &str, cwd: &PathBuf) -> Result<(Value, String), String> {

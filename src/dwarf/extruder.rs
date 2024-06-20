@@ -2,7 +2,7 @@ use std::{
     fs,
     hash::{DefaultHasher, Hash, Hasher},
     ops::Range,
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 
 use ansi_term::Colour;
@@ -3432,9 +3432,9 @@ fn inter_module(
     path.set_file_name(name);
     path.set_extension(ORE_EXT);
 
-    let mut hasher = DefaultHasher::new();
-    path.hash(&mut hasher);
-    let hash = hasher.finish();
+    // let mut hasher = DefaultHasher::new();
+    // path.hash(&mut hasher);
+    // let hash = hasher.finish();
 
     // let load_path = format!(
     //     "{}/extruded/{}_{}.lu_dog",

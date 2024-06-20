@@ -243,7 +243,8 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
 
@@ -279,7 +280,8 @@ true,            &sarzak,
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
 
@@ -312,7 +314,8 @@ true,            &sarzak,
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
 
@@ -345,7 +348,8 @@ true,            &sarzak,
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
 
@@ -385,7 +389,8 @@ true,            &sarzak,
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
 
@@ -433,7 +438,8 @@ true,            &sarzak,
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
 
@@ -484,7 +490,8 @@ true,            &sarzak,
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak_store,
+            true,
+            &sarzak_store,
         )
         .unwrap();
 
@@ -522,7 +529,8 @@ true,            &sarzak_store,
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak_store,
+            true,
+            &sarzak_store,
         )
         .unwrap();
 
@@ -566,7 +574,8 @@ true,            &sarzak_store,
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak_store,
+            true,
+            &sarzak_store,
         )
         .unwrap();
 
@@ -586,12 +595,15 @@ true,            &sarzak_store,
         let sarzak_store = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
 use std::result::Result;
+
 struct A {
     inner: int,
 }
+
 struct B {
     inner: int,
-  }
+}
+
 fn main() -> Result<A, B> {
     let result = Result::Err(96);
     let foo = match result {
@@ -607,7 +619,8 @@ fn main() -> Result<A, B> {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak_store,
+            true,
+            &sarzak_store,
         )
         .unwrap_or_else(|e| {
             for err in e {

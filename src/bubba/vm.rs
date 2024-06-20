@@ -51,6 +51,8 @@ static mut EXECUTOR: OnceCell<Executor> = OnceCell::new();
 
 static mut WRITE_MUTEX: OnceCell<Mutex<()>> = OnceCell::new();
 
+const MAX_PRINT_LEN: usize = 80;
+
 #[derive(Debug)]
 enum StackValue {
     Pointer(RefType<Value>),
@@ -2134,7 +2136,13 @@ fn print_stack(stack: &[StackValue], fp: usize) {
         } else {
             eprint!("\t     \t");
         }
-        eprintln!("stack {i}:\t{}", entry);
+        let string = format!("{entry}");
+        let snip = string.chars().take(MAX_PRINT_LEN).collect::<String>();
+        if string.len() > MAX_PRINT_LEN {
+            eprintln!("stack {i}:\t{snip}...");
+        } else {
+            eprintln!("stack {i}:\t{snip}");
+        }
     }
 }
 
