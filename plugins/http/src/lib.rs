@@ -187,7 +187,7 @@ mod http_client {
                             };
 
                             if !self.requests.contains(key as usize) {
-                                return RErr(Error::Plugin("Invalid request".into()));
+                                return RErr(Error::Plugin("Invalid Request".into()));
                             }
 
                             let request = self.requests.remove(key as usize);
@@ -210,7 +210,7 @@ mod http_client {
                             };
 
                             if !self.requests.contains(key as usize) {
-                                return RErr(Error::Plugin("Invalid request".into()));
+                                return RErr(Error::Plugin("Invalid Request".into()));
                             }
 
                             let request = self.requests.remove(key as usize);
@@ -247,6 +247,10 @@ mod http_client {
                                 Err(e) => return RErr(Error::Plugin(e.to_string().into())),
                             };
 
+                            if !self.responses.contains(key as usize) {
+                                return RErr(Error::Plugin("Invalid Response".into()));
+                            }
+
                             let response = self.responses.remove(key as usize);
                             if let Some(response) = Arc::into_inner(response) {
                                 let body = response.text().await;
@@ -275,6 +279,10 @@ mod http_client {
                                 Ok(key) => key,
                                 Err(e) => return RErr(Error::Plugin(e.to_string().into())),
                             };
+
+                            if !self.errors.contains(key as usize) {
+                                return RErr(Error::Plugin("Invalid HttpError".into()));
+                            }
 
                             let error = self.errors.remove(key as usize);
                             if let Some(error) = Arc::into_inner(error) {
@@ -307,7 +315,7 @@ mod http_server {
     use std::sync::{Arc, Mutex};
 
     use http_body_util::Full;
-    use hyper::body::{Body, Bytes};
+    use hyper::body::Bytes;
     use hyper::header::{HeaderValue, CONTENT_TYPE};
     use hyper::server::conn::http1;
     use hyper::service::Service;
