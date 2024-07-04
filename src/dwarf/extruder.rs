@@ -4842,8 +4842,6 @@ pub(super) fn typecheck(
             let a = s_read!(a);
             let b = s_read!(b);
 
-            dbg!(&a.name, &b.name);
-
             // We really need to check the generics, and we need to do it
             // recursively so that inner types are checked. If one side is
             // generic then the other must be as well.

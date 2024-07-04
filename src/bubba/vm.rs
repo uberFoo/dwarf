@@ -24,6 +24,7 @@ use crossbeam::channel::{unbounded, Receiver, Sender};
 use once_cell::sync::OnceCell;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use snafu::{location, Location};
+use threadpool::ThreadPool;
 
 use crate::{
     bubba::{
@@ -131,6 +132,7 @@ pub struct VM {
     #[cfg(feature = "async")]
     thread_count: usize,
     backtrace: bool,
+    lambda_pool: ThreadPool,
     lambda_sender: Sender<LambdaCall>,
     lambda_receiver: Receiver<LambdaCall>,
     trace: bool,
@@ -183,6 +185,8 @@ impl VM {
         }
 
         let backtrace = env::var("DWARF_BACKTRACE").is_ok();
+
+        let lambda_pool = ThreadPool::new(thread_count);
         let (lambda_sender, lambda_receiver) = unbounded();
 
         let mut vm = VM {
@@ -205,6 +209,7 @@ impl VM {
             #[cfg(feature = "async")]
             thread_count,
             backtrace,
+            lambda_pool,
             lambda_sender,
             lambda_receiver,
             trace,
@@ -253,17 +258,13 @@ impl VM {
             panic!("Missing symbols: {:?}", missing_symbols);
         }
 
-        // 🚧 This is such an ugly hack. There should probably be a thread pool.
-        // OTOH, if this is sufficient...
-        let mut vm_clone = vm.clone();
-        thread::spawn(move || loop {
-            vm_clone.lambda_listen();
-        });
-
-        let mut vm_clone = vm.clone();
-        thread::spawn(move || loop {
-            vm_clone.lambda_listen();
-        });
+        // We start threads to handle lambda calls.
+        for _ in 0..thread_count {
+            let mut vm_clone = vm.clone();
+            vm.lambda_pool.execute(move || loop {
+                vm_clone.lambda_listen();
+            });
+        }
 
         vm
     }
@@ -309,10 +310,12 @@ impl VM {
         stack.push(Value::Integer(0).into());
         stack.push(Value::Integer(0).into());
         stack.push(Value::Integer(0).into());
+
         // This is really lame. The call code expects stack_len - 2 - arity to be
-        // an address (an integer) ar it doesn't do anything with it. In any case
+        // an address (an integer) and it doesn't do anything with it. In any case
         // it needs to be here. So this is junk.
         stack.push(Value::Empty.into());
+
         // The next parameter is the number of locals on the stack -or- a LambdaPointer.
         stack.push(lambda.to_owned().into());
 

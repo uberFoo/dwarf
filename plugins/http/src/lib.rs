@@ -186,15 +186,21 @@ mod http_client {
                                 Err(e) => return RErr(Error::Plugin(e.to_string().into())),
                             };
 
+                            if !self.requests.contains(key as usize) {
+                                return RErr(Error::Plugin("Invalid request".into()));
+                            }
+
                             let request = self.requests.remove(key as usize);
-                            let request = Arc::try_unwrap(request).unwrap();
-                            let request = request.header(header, value);
+                            if let Some(request) = Arc::into_inner(request) {
+                                let request = request.header(header, value);
 
-                            let entry = self.requests.vacant_entry();
-                            let key = entry.key();
-                            self.requests.insert(Arc::new(request));
-
-                            Ok(FfiValue::Integer(key as DwarfInteger))
+                                let entry = self.requests.vacant_entry();
+                                let key = entry.key();
+                                self.requests.insert(Arc::new(request));
+                                Ok(FfiValue::Integer(key as DwarfInteger))
+                            } else {
+                                Err(Error::Plugin("Too many references to request.".into()))
+                            }
                         }
                         "send" => {
                             tracing::trace!(target: "http", "send enter");
@@ -202,6 +208,10 @@ mod http_client {
                                 Ok(key) => key,
                                 Err(e) => return RErr(Error::Plugin(e.to_string().into())),
                             };
+
+                            if !self.requests.contains(key as usize) {
+                                return RErr(Error::Plugin("Invalid request".into()));
+                            }
 
                             let request = self.requests.remove(key as usize);
                             if let Some(request) = Arc::into_inner(request) {
