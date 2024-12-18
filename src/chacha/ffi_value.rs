@@ -16,7 +16,9 @@ use uuid::Uuid;
 use crate::{
     bubba::{
         error::{BubbaError, Result},
+        new_ref, s_read,
         value::Value,
+        RefType,
     },
     chacha::{
         value::_struct::StructAttributes,
@@ -24,9 +26,8 @@ use crate::{
     },
     keywords::{ERR, OK, RESULT_TYPE},
     lu_dog::{ValueType, ValueTypeEnum},
-    new_ref,
     plug_in::PluginType,
-    s_read, DwarfFloat, DwarfInteger, NewRef, RefType, LAMBDA_FUNCS, PATH_SEP,
+    DwarfFloat, DwarfInteger, LAMBDA_FUNCS, PATH_SEP,
 };
 
 #[repr(C)]
@@ -723,7 +724,7 @@ where
 pub struct FfiValueType {
     pub subtype: FfiValueTypeEnum,
     pub bogus: bool,
-    pub id: usize,
+    pub id: FfiUuid,
 }
 
 impl From<&ValueType> for FfiValueType {
@@ -731,7 +732,7 @@ impl From<&ValueType> for FfiValueType {
         Self {
             subtype: value.subtype.clone().into(),
             bogus: value.bogus,
-            id: value.id,
+            id: value.id.into(),
         }
     }
 }
@@ -741,7 +742,7 @@ impl From<ValueType> for FfiValueType {
         Self {
             subtype: value.subtype.into(),
             bogus: value.bogus,
-            id: value.id,
+            id: value.id.into(),
         }
     }
 }
@@ -751,7 +752,7 @@ impl From<FfiValueType> for ValueType {
         Self {
             subtype: value.subtype.into(),
             bogus: value.bogus,
-            id: value.id,
+            id: value.id.into(),
         }
     }
 }
@@ -768,20 +769,20 @@ pub enum FfiValueTypeEnum {
     AnyList(FfiUuid),
     Char(FfiUuid),
     Empty(FfiUuid),
-    EnumGeneric(usize),
-    Enumeration(usize),
-    FuncGeneric(usize),
-    Function(usize),
-    XFuture(usize),
-    Import(usize),
-    Lambda(usize),
-    List(usize),
-    Map(usize),
-    ZObjectStore(usize),
-    XPlugin(usize),
+    EnumGeneric(FfiUuid),
+    Enumeration(FfiUuid),
+    FuncGeneric(FfiUuid),
+    Function(FfiUuid),
+    XFuture(FfiUuid),
+    Import(FfiUuid),
+    Lambda(FfiUuid),
+    List(FfiUuid),
+    Map(FfiUuid),
+    ZObjectStore(FfiUuid),
+    XPlugin(FfiUuid),
     Range(FfiUuid),
-    WoogStruct(usize),
-    StructGeneric(usize),
+    WoogStruct(FfiUuid),
+    StructGeneric(FfiUuid),
     Task(FfiUuid),
     Ty(FfiUuid),
     Unknown(FfiUuid),
@@ -793,20 +794,20 @@ impl From<ValueTypeEnum> for FfiValueTypeEnum {
             ValueTypeEnum::AnyList(uuid) => Self::AnyList(uuid.into()),
             ValueTypeEnum::Char(uuid) => Self::Char(uuid.into()),
             ValueTypeEnum::Empty(uuid) => Self::Empty(uuid.into()),
-            ValueTypeEnum::EnumGeneric(id) => Self::EnumGeneric(id),
-            ValueTypeEnum::Enumeration(id) => Self::Enumeration(id),
-            ValueTypeEnum::FuncGeneric(id) => Self::FuncGeneric(id),
-            ValueTypeEnum::Function(id) => Self::Function(id),
-            ValueTypeEnum::XFuture(id) => Self::XFuture(id),
-            ValueTypeEnum::Import(id) => Self::Import(id),
-            ValueTypeEnum::Lambda(id) => Self::Lambda(id),
-            ValueTypeEnum::List(id) => Self::List(id),
-            ValueTypeEnum::Map(id) => Self::Map(id),
-            ValueTypeEnum::ZObjectStore(id) => Self::ZObjectStore(id),
-            ValueTypeEnum::XPlugin(id) => Self::XPlugin(id),
+            ValueTypeEnum::EnumGeneric(id) => Self::EnumGeneric(id.into()),
+            ValueTypeEnum::Enumeration(id) => Self::Enumeration(id.into()),
+            ValueTypeEnum::FuncGeneric(id) => Self::FuncGeneric(id.into()),
+            ValueTypeEnum::Function(id) => Self::Function(id.into()),
+            ValueTypeEnum::XFuture(id) => Self::XFuture(id.into()),
+            ValueTypeEnum::Import(id) => Self::Import(id.into()),
+            ValueTypeEnum::Lambda(id) => Self::Lambda(id.into()),
+            ValueTypeEnum::List(id) => Self::List(id.into()),
+            ValueTypeEnum::Map(id) => Self::Map(id.into()),
+            ValueTypeEnum::ZObjectStore(id) => Self::ZObjectStore(id.into()),
+            ValueTypeEnum::XPlugin(id) => Self::XPlugin(id.into()),
             ValueTypeEnum::Range(uuid) => Self::Range(uuid.into()),
-            ValueTypeEnum::WoogStruct(id) => Self::WoogStruct(id),
-            ValueTypeEnum::StructGeneric(id) => Self::StructGeneric(id),
+            ValueTypeEnum::WoogStruct(id) => Self::WoogStruct(id.into()),
+            ValueTypeEnum::StructGeneric(id) => Self::StructGeneric(id.into()),
             ValueTypeEnum::Task(uuid) => Self::Task(uuid.into()),
             ValueTypeEnum::Ty(uuid) => Self::Ty(uuid.into()),
             ValueTypeEnum::Unknown(uuid) => Self::Unknown(uuid.into()),
@@ -820,20 +821,20 @@ impl From<FfiValueTypeEnum> for ValueTypeEnum {
             FfiValueTypeEnum::AnyList(uuid) => ValueTypeEnum::AnyList(uuid.into()),
             FfiValueTypeEnum::Char(uuid) => ValueTypeEnum::Char(uuid.into()),
             FfiValueTypeEnum::Empty(uuid) => ValueTypeEnum::Empty(uuid.into()),
-            FfiValueTypeEnum::EnumGeneric(id) => ValueTypeEnum::EnumGeneric(id),
-            FfiValueTypeEnum::Enumeration(id) => ValueTypeEnum::Enumeration(id),
-            FfiValueTypeEnum::FuncGeneric(id) => ValueTypeEnum::FuncGeneric(id),
-            FfiValueTypeEnum::Function(id) => ValueTypeEnum::Function(id),
-            FfiValueTypeEnum::XFuture(id) => ValueTypeEnum::XFuture(id),
-            FfiValueTypeEnum::Import(id) => ValueTypeEnum::Import(id),
-            FfiValueTypeEnum::Lambda(id) => ValueTypeEnum::Lambda(id),
-            FfiValueTypeEnum::List(id) => ValueTypeEnum::List(id),
-            FfiValueTypeEnum::Map(id) => ValueTypeEnum::Map(id),
-            FfiValueTypeEnum::ZObjectStore(id) => ValueTypeEnum::ZObjectStore(id),
-            FfiValueTypeEnum::XPlugin(id) => ValueTypeEnum::XPlugin(id),
+            FfiValueTypeEnum::EnumGeneric(id) => ValueTypeEnum::EnumGeneric(id.into()),
+            FfiValueTypeEnum::Enumeration(id) => ValueTypeEnum::Enumeration(id.into()),
+            FfiValueTypeEnum::FuncGeneric(id) => ValueTypeEnum::FuncGeneric(id.into()),
+            FfiValueTypeEnum::Function(id) => ValueTypeEnum::Function(id.into()),
+            FfiValueTypeEnum::XFuture(id) => ValueTypeEnum::XFuture(id.into()),
+            FfiValueTypeEnum::Import(id) => ValueTypeEnum::Import(id.into()),
+            FfiValueTypeEnum::Lambda(id) => ValueTypeEnum::Lambda(id.into()),
+            FfiValueTypeEnum::List(id) => ValueTypeEnum::List(id.into()),
+            FfiValueTypeEnum::Map(id) => ValueTypeEnum::Map(id.into()),
+            FfiValueTypeEnum::ZObjectStore(id) => ValueTypeEnum::ZObjectStore(id.into()),
+            FfiValueTypeEnum::XPlugin(id) => ValueTypeEnum::XPlugin(id.into()),
             FfiValueTypeEnum::Range(uuid) => ValueTypeEnum::Range(uuid.into()),
-            FfiValueTypeEnum::WoogStruct(id) => ValueTypeEnum::WoogStruct(id),
-            FfiValueTypeEnum::StructGeneric(id) => ValueTypeEnum::StructGeneric(id),
+            FfiValueTypeEnum::WoogStruct(id) => ValueTypeEnum::WoogStruct(id.into()),
+            FfiValueTypeEnum::StructGeneric(id) => ValueTypeEnum::StructGeneric(id.into()),
             FfiValueTypeEnum::Task(uuid) => ValueTypeEnum::Task(uuid.into()),
             FfiValueTypeEnum::Ty(uuid) => ValueTypeEnum::Ty(uuid.into()),
             FfiValueTypeEnum::Unknown(uuid) => ValueTypeEnum::Unknown(uuid.into()),
@@ -854,46 +855,46 @@ impl From<FfiValueTypeEnum> for RefType<ValueTypeEnum> {
                 new_ref!(ValueTypeEnum, ValueTypeEnum::Empty(uuid.into()))
             }
             FfiValueTypeEnum::EnumGeneric(id) => {
-                new_ref!(ValueTypeEnum, ValueTypeEnum::EnumGeneric(id))
+                new_ref!(ValueTypeEnum, ValueTypeEnum::EnumGeneric(id.into()))
             }
             FfiValueTypeEnum::Enumeration(id) => {
-                new_ref!(ValueTypeEnum, ValueTypeEnum::Enumeration(id))
+                new_ref!(ValueTypeEnum, ValueTypeEnum::Enumeration(id.into()))
             }
             FfiValueTypeEnum::FuncGeneric(id) => {
-                new_ref!(ValueTypeEnum, ValueTypeEnum::FuncGeneric(id))
+                new_ref!(ValueTypeEnum, ValueTypeEnum::FuncGeneric(id.into()))
             }
             FfiValueTypeEnum::Function(id) => {
-                new_ref!(ValueTypeEnum, ValueTypeEnum::Function(id))
+                new_ref!(ValueTypeEnum, ValueTypeEnum::Function(id.into()))
             }
             FfiValueTypeEnum::XFuture(id) => {
-                new_ref!(ValueTypeEnum, ValueTypeEnum::XFuture(id))
+                new_ref!(ValueTypeEnum, ValueTypeEnum::XFuture(id.into()))
             }
             FfiValueTypeEnum::Import(id) => {
-                new_ref!(ValueTypeEnum, ValueTypeEnum::Import(id))
+                new_ref!(ValueTypeEnum, ValueTypeEnum::Import(id.into()))
             }
             FfiValueTypeEnum::Lambda(id) => {
-                new_ref!(ValueTypeEnum, ValueTypeEnum::Lambda(id))
+                new_ref!(ValueTypeEnum, ValueTypeEnum::Lambda(id.into()))
             }
             FfiValueTypeEnum::List(id) => {
-                new_ref!(ValueTypeEnum, ValueTypeEnum::List(id))
+                new_ref!(ValueTypeEnum, ValueTypeEnum::List(id.into()))
             }
             FfiValueTypeEnum::Map(id) => {
-                new_ref!(ValueTypeEnum, ValueTypeEnum::Map(id))
+                new_ref!(ValueTypeEnum, ValueTypeEnum::Map(id.into()))
             }
             FfiValueTypeEnum::ZObjectStore(id) => {
-                new_ref!(ValueTypeEnum, ValueTypeEnum::ZObjectStore(id))
+                new_ref!(ValueTypeEnum, ValueTypeEnum::ZObjectStore(id.into()))
             }
             FfiValueTypeEnum::XPlugin(id) => {
-                new_ref!(ValueTypeEnum, ValueTypeEnum::XPlugin(id))
+                new_ref!(ValueTypeEnum, ValueTypeEnum::XPlugin(id.into()))
             }
             FfiValueTypeEnum::Range(uuid) => {
                 new_ref!(ValueTypeEnum, ValueTypeEnum::Range(uuid.into()))
             }
             FfiValueTypeEnum::WoogStruct(id) => {
-                new_ref!(ValueTypeEnum, ValueTypeEnum::WoogStruct(id))
+                new_ref!(ValueTypeEnum, ValueTypeEnum::WoogStruct(id.into()))
             }
             FfiValueTypeEnum::StructGeneric(id) => {
-                new_ref!(ValueTypeEnum, ValueTypeEnum::StructGeneric(id))
+                new_ref!(ValueTypeEnum, ValueTypeEnum::StructGeneric(id.into()))
             }
             FfiValueTypeEnum::Task(uuid) => {
                 new_ref!(ValueTypeEnum, ValueTypeEnum::Task(uuid.into()))

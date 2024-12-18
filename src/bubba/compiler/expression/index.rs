@@ -4,6 +4,7 @@ use crate::{
     bubba::{
         compiler::{compile_expression, BubbaCompilerError, CThonk, Context, Result},
         instr::Instruction,
+        s_read as ref_read,
     },
     chacha::{models::ModelContext, pvt::PrintableValueType},
     lu_dog::{ValueType, ValueTypeEnum},
@@ -39,7 +40,7 @@ pub(in crate::bubba::compiler) fn compile(
         Some(v_ty) => match v_ty.subtype {
             ValueTypeEnum::Ty(ref ty) => {
                 let ty = sarzak.exhume_ty(ty).unwrap();
-                let ty = s_read!(ty);
+                let ty = ref_read!(ty);
                 match &*ty {
                     Ty::Integer(_) => {
                         thonk.insert_instruction_with_span(
@@ -94,9 +95,12 @@ mod test {
     use std::env;
 
     use crate::{
-        bubba::compiler::{
-            test::{get_dwarf_home, run_vm, setup_logging},
-            *,
+        bubba::{
+            compiler::{
+                test::{get_dwarf_home, run_vm, setup_logging},
+                *,
+            },
+            s_read as ref_read,
         },
         dwarf::{new_lu_dog, parse_dwarf},
         sarzak::MODEL as SARZAK_MODEL,
@@ -118,7 +122,8 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
 
@@ -129,7 +134,7 @@ true,            &sarzak,
 
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 13);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &2.into());
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &2.into());
     }
 
     #[test]
@@ -147,7 +152,8 @@ true,            &sarzak,
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
 
@@ -171,7 +177,8 @@ true,            &sarzak,
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
 
@@ -182,6 +189,6 @@ true,            &sarzak,
 
         assert_eq!(program.get_instruction_card(), 6);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Char('o'));
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &Value::Char('o'));
     }
 }

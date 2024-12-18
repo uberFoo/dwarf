@@ -292,9 +292,98 @@ cfg_if::cfg_if! {
                 $arg.into_inner().unwrap()
             };
         }
+    } else if #[cfg(feature = "lu-dog-rc")] {
+        type SarzakStorePtr = uuid::Uuid;
+        type RcType<T> = std::rc::Rc<T>;
+        impl<T> NewRcType<T> for RcType<T> {
+            fn new_rc_type(value: T) -> RcType<T> {
+                std::rc::Rc::new(value)
+            }
+        }
 
+        pub type RefType<T> = std::rc::Rc<std::cell::RefCell<T>>;
+
+        impl<T> NewRef<T> for RefType<T> {
+            fn new_ref(value: T) -> RefType<T> {
+                std::rc::Rc::new(std::cell::RefCell::new(value))
+            }
+        }
+
+        // Macros to abstract the underlying read/write operations.
+        #[macro_export]
+        macro_rules! ref_read {
+            ($arg:expr) => {
+                $arg.borrow()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_try_read {
+            ($arg:expr) => {
+                $arg.try_read()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_write {
+            ($arg:expr) => {
+                $arg.borrow_mut()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_to_inner {
+            ($arg:expr) => {
+                $arg.into_inner().unwrap()
+            };
+        }
    } else if #[cfg(feature = "multi-vec")] {
         type SarzakStorePtr = usize;
+        type RcType<T> = std::sync::Arc<T>;
+        impl<T> NewRcType<T> for RcType<T> {
+            fn new_rc_type(value: T) -> RcType<T> {
+                std::sync::Arc::new(value)
+            }
+        }
+
+        pub type RefType<T> = std::sync::Arc<std::sync::RwLock<T>>;
+        impl<T> NewRef<T> for RefType<T> {
+            fn new_ref(value: T) -> RefType<T> {
+                std::sync::Arc::new(std::sync::RwLock::new(value))
+            }
+        }
+
+        // Macros to abstract the underlying read/write operations.
+        #[macro_export]
+        macro_rules! ref_read {
+            ($arg:expr) => {
+                $arg.read().unwrap()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_try_read {
+            ($arg:expr) => {
+                $arg.try_read()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_write {
+            ($arg:expr) => {
+                $arg.write().unwrap()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_to_inner {
+            ($arg:expr) => {
+                $arg.into_inner().unwrap()
+            };
+        }
+
+   } else if #[cfg(feature = "multi-lu-dog")] {
+        type SarzakStorePtr = uuid::Uuid;
         type RcType<T> = std::sync::Arc<T>;
         impl<T> NewRcType<T> for RcType<T> {
             fn new_rc_type(value: T) -> RcType<T> {
@@ -442,7 +531,7 @@ pub(crate) type ModelStore =
 /// This type is used to signify that a struct, enum, or ObjectStore have been
 /// added in the extruder. The information is picked up by the interpreter and
 /// used to update the corresponding structures in the interpreter.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Dirty {
     Enum(RefType<lu_dog::Enumeration>),
     Func(RefType<lu_dog::Function>),
@@ -496,9 +585,6 @@ impl Default for Context {
         }
     }
 }
-
-// pub type ValueResult = Result<RefType<Value>, ChaChaError>;
-pub type ValueResult = Result<RefType<crate::bubba::value::Value>, BubbaError>;
 
 pub(crate) trait Desanitize {
     fn desanitize(&self) -> String;

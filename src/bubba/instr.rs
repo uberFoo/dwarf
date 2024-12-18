@@ -4,7 +4,10 @@ use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
 use serde::{Deserialize, Serialize};
 
-use crate::{bubba::value::Value, s_read, RefType, Span};
+use crate::{
+    bubba::{s_read, value::Value, RefType},
+    Span,
+};
 
 /// Instruction
 ///
@@ -671,6 +674,10 @@ impl Program {
 
     pub(crate) fn get_symbol(&self, name: &str) -> Option<&Value> {
         self.symbols.get(name)
+    }
+
+    pub(crate) fn dump_symbols(&self) {
+        dbg!(&self.symbols);
     }
 
     pub(crate) fn add_thonk(&mut self, thonk: Thonk) {

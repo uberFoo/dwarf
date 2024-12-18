@@ -22,13 +22,12 @@ use dwarf::{
         compiler::{compile, BubbaCompilerErrorReporter},
         error::BubbaErrorReporter,
         value::Value as BubbaValue,
-        Program, VM,
+        Program, RefType, VM,
     },
     chacha::{banner::banner2, dap::DapAdapter},
     dwarf::{new_lu_dog, parse_dwarf},
-    new_ref, s_read,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
-    Context, NewRef, RefType, BUILD_TIME, VERSION,
+    Context, BUILD_TIME, VERSION,
 };
 use reqwest::Url;
 #[cfg(feature = "tracy")]
@@ -330,15 +329,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Compare timestamps of source and gp file.
                 let source_meta = source_meta.unwrap();
                 let gp_meta = fs::metadata(path).map_err(|e| {
-                    eprintln!("Unable to read gp file: {}", e);
+                    eprintln!("Unable to read gp file metadata: {}", e);
                     e
                 })?;
                 let source_time = source_meta.modified().map_err(|e| {
-                    eprintln!("Unable to read source file: {}", e);
+                    eprintln!("Unable to read source file modified time: {}", e);
                     e
                 })?;
                 let gp_time = gp_meta.modified().map_err(|e| {
-                    eprintln!("Unable to read gp file: {}", e);
+                    eprintln!("Unable to read gp file modified time: {}", e);
                     e
                 })?;
 
@@ -407,7 +406,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Get args and call the VM.
             let args: Vec<RefType<BubbaValue>> = dwarf_args
                 .into_iter()
-                .map(|a| new_ref!(BubbaValue, a.into()))
+                .map(|a| std::sync::Arc::new(std::sync::RwLock::new(a.into())))
                 .collect();
 
             #[cfg(feature = "async")]
@@ -426,7 +425,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
 
-            let value = s_read!(value);
+            let value = value.read().unwrap();
             match &*value {
                 BubbaValue::Error(msg) => {
                     eprintln!(
@@ -521,7 +520,7 @@ fn get_context(
         silent,
         &sarzak,
     ) {
-        Ok(lu_dog) => Some(lu_dog),
+        Ok(context) => Some(context),
         Err(errors) => {
             for err in errors {
                 eprintln!("{}", dwarf::dwarf::error::DwarfErrorReporter(&err, is_uber));

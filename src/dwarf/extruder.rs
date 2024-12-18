@@ -1,6 +1,7 @@
 use std::{
     fs,
     hash::{DefaultHasher, Hash, Hasher},
+    io,
     ops::Range,
     path::PathBuf,
 };
@@ -97,6 +98,19 @@ macro_rules! link_argument {
 }
 
 pub(crate) use link_argument;
+
+macro_rules! link_pattern {
+    ($last:expr, $next:expr, $store:expr) => {{
+        let next = s_read!($next);
+        if let Some(last) = $last {
+            let last = $store.exhume_pattern(&last).unwrap().clone();
+            let mut last = s_write!(last);
+            last.next = Some(next.id);
+        }
+
+        Some(next.id)
+    }};
+}
 
 macro_rules! link_statement {
     ($last:expr, $next:expr, $store:expr) => {{
@@ -340,6 +354,9 @@ pub struct Context<'a> {
     pub sarzak: &'a SarzakStore,
     pub dwarf_home: &'a PathBuf,
     pub cwd: &'a PathBuf,
+    /// Dirty
+    ///
+    /// This was used by the interpreter. It should be removed.
     pub dirty: &'a mut Vec<Dirty>,
     pub file_name: &'a str,
     pub func_defs: HashMap<String, FunctionDefinition>,
@@ -359,6 +376,8 @@ pub struct Context<'a> {
     /// Types
     ///
     /// This is a HashSet of types that have been imported.
+    /// This can probably be removed and replaced with a check against the
+    /// scopes HashMap.
     pub types: &'a mut HashSet<String>,
     /// Silent
     ///
@@ -1152,7 +1171,8 @@ pub(super) fn inter_expression(
                     lu_dog,
                 );
 
-                let list_expr = ListExpression::new(Some(&element), lu_dog);
+               let list_expr = ListExpression::new(Some(&element),
+                   &ValueType::new_unknown(true, lu_dog), lu_dog);
 
                 let mut last_element_uuid: Option<SarzakStorePtr> = Some(s_read!(element).id);
                 let mut position = 1;
@@ -1343,8 +1363,9 @@ pub(super) fn inter_expression(
                 .iter()
                 .map(|stmt| new_ref!(ParserStatement, stmt.0.to_owned()))
                 .collect();
-            // 🚧 The one that's commented out is correct -- assuming the block isn't `{}`.
-            // The one that isn't commented out _should_ be right, but I'm not sure that it is.
+            // 🚧 The one that's commented out is correct -- assuming the block
+            // isn't `{}`. The one that isn't commented out _should_ be right,
+            // but I'm not sure that it is.
             // let stmts_span = stmts.iter().map(|stmt| stmt.1.start).min().unwrap()
             //     ..stmts.iter().map(|stmt| stmt.1.end).max().unwrap();
             let stmts_span = s_read!(span).start as usize..s_read!(span).end as usize;
@@ -1481,6 +1502,9 @@ pub(super) fn inter_expression(
         // Equals
         //
         ParserExpression::Equals(ref lhs_p, ref rhs_p) => {
+            debug!("ParserExpression::Equals lhs {:?}", lhs_p);
+            debug!("ParserExpression::Equals rhs {:?}", rhs_p);
+
             let (lhs, lhs_ty) = inter_expression(
                 &new_ref!(ParserExpression, lhs_p.0.to_owned()),
                 &lhs_p.1,
@@ -1834,22 +1858,11 @@ pub(super) fn inter_expression(
             };
             let body = new_ref!(ParserExpression, body.to_owned());
 
-            let (body, _body_ty) =
+            let ((body, _), _body_ty) =
                 inter_expression(&body, bspan, block, context, import_stack, lu_dog)?;
 
-            // 🚧 This is dumb. I'm extracting the body here, just to stick it back
-            // into an expression in the interpreter. The model will need to be fixed
-            // so that the for loop takes an expression and not a body, which I think
-            // is sensible.
-            let body = s_read!(body.0);
-            let body = if let ExpressionEnum::Block(body) = &body.subtype {
-                body
-            } else {
-                unreachable!()
-            };
-            let body = lu_dog.exhume_block(body).unwrap();
-            let body = Expression::new_block(true, &body, lu_dog);
-
+            // I think that the model should be changed so that the For Loop takes
+            // an Expression rather than a Body.
             let for_loop = ForLoop::new(iter.0.to_owned(), &body, &collection.0, lu_dog);
             let expr = Expression::new_for_loop(true, &for_loop, lu_dog);
             let ty = ValueType::new_empty(true, lu_dog);
@@ -2494,7 +2507,7 @@ pub(super) fn inter_expression(
                 let list = List::new(&ValueType::new_func_generic(true, &generic, lu_dog), lu_dog);
                 let expr = Expression::new_list_expression(
                     true,
-                    &ListExpression::new(None, lu_dog),
+                    &ListExpression::new(None, &ValueType::new_empty(true, lu_dog), lu_dog),
                     lu_dog,
                 );
                 let ty = ValueType::new_list(true, &list, lu_dog);
@@ -2532,7 +2545,7 @@ pub(super) fn inter_expression(
                     lu_dog,
                 );
 
-                let list_expr = ListExpression::new(Some(&element), lu_dog);
+                let list_expr = ListExpression::new(Some(&element), &first_ty, lu_dog);
 
                 let mut last_element_uuid: Option<SarzakStorePtr> = Some(s_read!(element).id);
                 let mut position = 1;
@@ -2604,6 +2617,8 @@ pub(super) fn inter_expression(
                 parent = s_read!(block).r93_block(lu_dog).pop();
             }
 
+            dbg!(&values);
+
             // Now search for a value that's a Variable, and see if the access matches
             // the variable.
             let mut expr_type_tuples = values
@@ -2621,6 +2636,7 @@ pub(super) fn inter_expression(
                             None
                         }
                         XValueEnum::Variable(ref var) => {
+                            dbg!(&var);
                             let var = s_read!(lu_dog.exhume_variable(var).unwrap()).clone();
                             debug!("value var {:?}", var);
                             // Check the name
@@ -2652,6 +2668,7 @@ pub(super) fn inter_expression(
                                             XValue::new_expression(block, &ty, &expr, lu_dog);
                                         update_span_value(&span, &value, location!());
 
+                                        debug!("LocalVariable ({expr:#?}, {ty:#?})");
                                         Some(((expr, span.clone()), ty))
                                     }
                                 }
@@ -2700,9 +2717,12 @@ pub(super) fn inter_expression(
             //
             // debug_assert!(expr_type_tuples.len() <= 1);
 
-            debug!("expr_type_tuples ({}): {expr_type_tuples:?}", expr_type_tuples.len());
+            dbg!(&expr_type_tuples);
 
             // Why are we taking the last one? -- Oh, read above.
+            // I guess we want the first one. Sigh. The comments need to be updated
+            // into something narrative, and useful.
+            // Fuck if I know.
             if let Some(expr_ty_tuple) = expr_type_tuples.pop() {
                 debug!("returning {:?}", expr_ty_tuple);
                 Ok(expr_ty_tuple.clone())
@@ -2919,6 +2939,7 @@ pub(super) fn inter_expression(
 
             let xmatch = XMatch::new(Uuid::new_v4(), &scrutinee.0, lu_dog);
 
+            let mut last_uuid: Option<SarzakStorePtr> = None;
             let mut first = true;
             let mut match_ty = ValueType::new_unknown(true, lu_dog);
             for ((pattern, match_expr), ref span) in patterns {
@@ -2964,7 +2985,8 @@ pub(super) fn inter_expression(
                     typecheck((&match_ty, span), (&ty, span), location!(), context, lu_dog)?;
                 }
 
-                let _pat = AssocPat::new(&expr.0, &pattern_expr.0, &xmatch, lu_dog);
+                let pat = AssocPat::new(&expr.0, None, &pattern_expr.0, &xmatch, lu_dog);
+                last_uuid = link_pattern!(last_uuid, pat, lu_dog);
             }
 
             let expr = Expression::new_x_match(true, &xmatch, lu_dog);
@@ -3270,12 +3292,17 @@ pub(super) fn inter_expression(
                 cfg_if::cfg_if! {
                     if #[cfg(not(feature="debug"))] {
                         // See # Span Bug
-                        lu_dog.inter_span(|id| {
-                            let mut span = s_read!(span).clone();
-                            span.x_value = Some(s_read!(value).id);
-                            span.id = id;
-                            new_ref!(LuDogSpan, span)
-                        });
+                        let mut span = s_read!(span).clone();
+                        span.x_value = Some(s_read!(value).id);
+                        span.id = Uuid::new_v4();
+                        let span = new_ref!(LuDogSpan, span);
+                        lu_dog.inter_span(span.clone());
+                        // lu_dog.inter_span(|id| {
+                        //     let mut span = s_read!(span).clone();
+                        //     span.x_value = Some(s_read!(value).id);
+                        //     span.id = id;
+                        //     new_ref!(LuDogSpan, span)
+                        // });
                     } else {
                         // update_span_value(&span, &value, location!());
                         let span = LuDogSpan::new(
@@ -3432,50 +3459,145 @@ fn inter_module(
     path.set_file_name(name);
     path.set_extension(ORE_EXT);
 
-    // let mut hasher = DefaultHasher::new();
-    // path.hash(&mut hasher);
-    // let hash = hasher.finish();
+    let mut hasher = DefaultHasher::new();
+    path.hash(&mut hasher);
+    let hash = hasher.finish();
 
-    // let load_path = format!(
-    //     "{}/extruded/{}_{}.lu_dog",
-    //     context.dwarf_home.display(),
-    //     hash,
-    //     path.file_name().unwrap().to_str().unwrap()
-    // );
+    let compiled_path = format!(
+        "{}/extruded/{}_{}.道",
+        context.dwarf_home.display(),
+        hash,
+        path.file_name().unwrap().to_str().unwrap()
+    );
+    let compiled_path = PathBuf::from(&compiled_path);
+    let mut dirty_path = compiled_path.clone();
+    dirty_path.set_extension("dirty");
+
+    if let Some(src_meta) = fs::metadata(&path)
+        .map_err(|e| {
+            errors.push(DwarfError::File {
+                source: e,
+                description: format!("Unable to open import: {name}"),
+                location: location!(),
+                path: path.to_owned(),
+            });
+        })
+        .ok()
+    {
+        if let Some(src_time) = src_meta
+            .modified()
+            .map_err(|e| {
+                errors.push(DwarfError::File {
+                    source: e,
+                    description: format!("Unable to read modified time of: {name}"),
+                    location: location!(),
+                    path: path.to_owned(),
+                });
+            })
+            .ok()
+        {
+            if compiled_path.exists() {
+                if let Some(compiled_meta) = fs::metadata(&compiled_path)
+                    .map_err(|e| {
+                        errors.push(DwarfError::File {
+                            source: e,
+                            description: format!("Unable to open import: {name} (compiled)"),
+                            location: location!(),
+                            path: compiled_path.to_owned(),
+                        });
+                    })
+                    .ok()
+                {
+                    if let Some(compiled_time) = compiled_meta
+                        .modified()
+                        .map_err(|e| {
+                            errors.push(DwarfError::File {
+                                source: e,
+                                description: format!(
+                                    "Unable to read modified time of: {name} (compiled)"
+                                ),
+                                location: location!(),
+                                path: compiled_path.to_owned(),
+                            });
+                        })
+                        .ok()
+                    {
+                        if src_time < compiled_time {
+                            debug!("{name} already compiled");
+
+                            if !context.silent {
+                                println!(
+                                    "{} {} @ {}",
+                                    Colour::Green.paint("Loading extruded:"),
+                                    Colour::Blue.paint(name),
+                                    compiled_path.display()
+                                );
+                            }
+
+                            // Load the extruded domain and merge it into the current domain.
+                            if let Some(compiled) = LuDogStore::load_bincode(&compiled_path)
+                                .map_err(|e| {
+                                    errors.push(DwarfError::File {
+                                        source: e,
+                                        description: format!("Attempting to load lu_dog: {name}"),
+                                        location: location!(),
+                                        path: compiled_path.to_owned(),
+                                    });
+                                })
+                                .ok()
+                            {
+                                lu_dog.merge(&compiled);
+
+                                // Update the dirty stuff, even though it doesn't seem to be used.
+                                if let Some(dirty_file) = fs::File::open(&dirty_path)
+                                    .map_err(|e| {
+                                        errors.push(DwarfError::File {
+                                            source: e,
+                                            description: format!(
+                                                "Attempting to open dirty file: {name}"
+                                            ),
+                                            location: location!(),
+                                            path: dirty_path.to_owned(),
+                                        })
+                                    })
+                                    .ok()
+                                {
+                                    let reader = io::BufReader::new(dirty_file);
+                                    if let Some(dirty) = serde_json::from_reader(reader)
+                                        .map_err(|e| {
+                                            errors.push(DwarfError::File {
+                                                source: io::Error::new(
+                                                    io::ErrorKind::Other,
+                                                    e.to_string(),
+                                                ),
+                                                description: format!(
+                                                    "Attempting to read dirty file: {name}"
+                                                ),
+                                                location: location!(),
+                                                path: dirty_path.to_owned(),
+                                            })
+                                        })
+                                        .ok()
+                                    {
+                                        context.dirty.extend::<Vec<Dirty>>(dirty);
+                                    }
+                                }
+
+                                return Ok(());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     if !context.imports.insert(path.clone()) {
         debug!("{name} already imported");
-        // let loaded_lu_dog = LuDogStore::load_bincode(load_path).map_err(|e| {
-        //     errors.push(DwarfError::File {
-        //         description: "Attempting to load lu_dog".to_owned(),
-        //         path: path,
-        //         source: e,
-        //         location: location!(),
-        //     });
-        //     errors
-        // })?;
-
-        // lu_dog.merge(&loaded_lu_dog);
+        panic!("this is dead code");
         return Ok(());
     }
 
-    // let load_path_path = Path::new(&load_path);
-
-    // if load_path_path.exists() {
-    //     let loaded_lu_dog = LuDogStore::load_bincode(load_path).map_err(|e| {
-    //         errors.push(DwarfError::File {
-    //             description: "Attempting to load lu_dog".to_owned(),
-    //             path: path,
-    //             source: e,
-    //             location: location!(),
-    //         });
-    //         errors
-    //     })?;
-
-    //     lu_dog.merge(&loaded_lu_dog);
-
-    //     return Ok(());
-    // } else {
     if !context.silent {
         println!("\n{} {}", Colour::Green.paint("Extruding:"), path.display());
     }
@@ -3498,6 +3620,7 @@ fn inter_module(
                     // We want fresh scopes and types importing a module.
                     let mut scopes = HashMap::default();
                     let mut types = HashSet::default();
+                    let mut new_lu_dog = LuDogStore::new();
 
                     let mut new_ctx = Context::new(
                         source_code,
@@ -3508,8 +3631,7 @@ fn inter_module(
                         context.models,
                         &mut dirty,
                         location!(),
-                        // &mut new_lu_dog,
-                        lu_dog,
+                        &mut new_lu_dog,
                         type_path,
                         &mut scopes,
                         context.imports,
@@ -3519,32 +3641,42 @@ fn inter_module(
 
                     // Extrusion time
                     trace!("processing dwarf import");
-                    // walk_tree(&ast, &mut new_ctx, import_stack, &mut new_lu_dog)?;
-                    walk_tree(&ast, &mut new_ctx, import_stack, lu_dog)?;
+                    walk_tree(&ast, &mut new_ctx, import_stack, &mut new_lu_dog)?;
                     trace!("done processing dwarf import");
 
-                    // let module_path = format!(
-                    //     "{}/extruded/{}_{}.lu_dog",
-                    //     context.dwarf_home.display(),
-                    //     hash,
-                    //     path.file_name().unwrap().to_str().unwrap()
-                    // );
+                    // Persist the beast
+                    let _ = new_lu_dog.persist_bincode(&compiled_path).map_err(|e| {
+                        errors.push(DwarfError::File {
+                            source: e,
+                            description: format!("Attempting to persist lu_dog: {name}"),
+                            location: location!(),
+                            path: compiled_path.to_owned(),
+                        });
+                    });
 
-                    // dbg!(&module_path);
+                    if let Some(dirty_file) = fs::File::create(dirty_path)
+                        .map_err(|e| {
+                            errors.push(DwarfError::File {
+                                source: e,
+                                description: format!("Attempting to create file: {name}"),
+                                location: location!(),
+                                path: compiled_path.to_owned(),
+                            });
+                        })
+                        .ok()
+                    {
+                        let mut writer = io::BufWriter::new(dirty_file);
+                        let _ = serde_json::to_writer(&mut writer, &dirty).map_err(|e| {
+                            errors.push(DwarfError::File {
+                                source: io::Error::new(io::ErrorKind::Other, e.to_string()),
+                                description: format!("Attempting to write dirty file: {name}"),
+                                location: location!(),
+                                path: compiled_path.to_owned(),
+                            });
+                        });
+                    }
 
-                    // new_lu_dog.persist_bincode(module_path).unwrap();
-
-                    // new_lu_dog.persist_bincode(persist_path).map_err(|e| {
-                    //     errors.push(DwarfError::File {
-                    //         description: "Attempting to persist lu_dog".to_owned(),
-                    //         path: path,
-                    //         source: e,
-                    //         location: location!(),
-                    //     });
-                    //     errors
-                    // })?;
-
-                    // lu_dog.merge(&new_lu_dog);
+                    lu_dog.merge(&new_lu_dog);
 
                     context.dirty.extend(dirty);
                 }
@@ -3621,6 +3753,7 @@ fn inter_import(
     };
 
     let module = path_root.first().unwrap(); // This will have _something_.
+    let type_root = PATH_SEP.to_owned() + path_root.join(PATH_SEP).as_str() + PATH_SEP;
 
     // It looks like we are first trying to load an extension.
     let mut path = context.dwarf_home.clone();
@@ -3630,6 +3763,24 @@ fn inter_import(
     let dir = path.clone();
 
     path.push(LIB_TAO);
+
+    let mut hasher = DefaultHasher::new();
+    path.hash(&mut hasher);
+    let hash = hasher.finish();
+
+    let compiled_path = PathBuf::from(format!(
+        "{}/extruded/{}_{}.道",
+        context.dwarf_home.display(),
+        hash,
+        path.file_name().unwrap().to_str().unwrap()
+    ));
+
+    let dirty_path = PathBuf::from(format!(
+        "{}/extruded/{}_{}.道.dirty",
+        context.dwarf_home.display(),
+        hash,
+        path.file_name().unwrap().to_str().unwrap()
+    ));
 
     // And then here if the extension doesn't exist, we try the lib dir.
     let (dir, path) = if path.exists() {
@@ -3658,13 +3809,13 @@ fn inter_import(
         (dir, path)
     };
 
-    let type_root = PATH_SEP.to_owned() + path_root.join(PATH_SEP).as_str() + PATH_SEP;
-
     // We need to push the thing we are importing onto the stack so
     // that when we are interring a module we can import only the
     // thing on the top of the stack.
     let fq_type = type_root.clone() + &ty;
 
+    // This is testing if it's been imported yet, either via a compiled file,
+    // or extruding the module.
     if let Some(_) = context.types.get(&fq_type) {
         debug!("{fq_type} already imported");
         return Ok(());
@@ -3682,7 +3833,134 @@ fn inter_import(
         );
     }
 
-    import_stack.push(fq_type);
+    import_stack.push(fq_type.clone());
+
+    // I really didn't want to just unwrap anything, and this is what you get.
+    // It's ugly AF.
+    if let Some(src_meta) = fs::metadata(&path)
+        .map_err(|e| {
+            errors.push(DwarfError::File {
+                source: e,
+                description: format!("Unable to open import: {module}"),
+                location: location!(),
+                path: path.to_owned(),
+            });
+        })
+        .ok()
+    {
+        if let Some(src_time) = src_meta
+            .modified()
+            .map_err(|e| {
+                errors.push(DwarfError::File {
+                    source: e,
+                    description: format!("Unable to read modified time of: {module}"),
+                    location: location!(),
+                    path: path.to_owned(),
+                });
+            })
+            .ok()
+        {
+            if compiled_path.exists() {
+                if let Some(compiled_meta) = fs::metadata(&compiled_path)
+                    .map_err(|e| {
+                        errors.push(DwarfError::File {
+                            source: e,
+                            description: format!("Unable to open import: {module}"),
+                            location: location!(),
+                            path: compiled_path.to_owned(),
+                        });
+                    })
+                    .ok()
+                {
+                    if let Some(compiled_time) = compiled_meta
+                        .modified()
+                        .map_err(|e| {
+                            errors.push(DwarfError::File {
+                                source: e,
+                                description: format!("Unable to read modified time of: {module}"),
+                                location: location!(),
+                                path: compiled_path.to_owned(),
+                            });
+                        })
+                        .ok()
+                    {
+                        if src_time < compiled_time {
+                            debug!("{module} already compiled");
+
+                            if !context.silent {
+                                println!(
+                                    "{} {} @ {}",
+                                    Colour::Green.paint("Loading extruded:"),
+                                    Colour::Blue.paint(&fq_type),
+                                    compiled_path.display()
+                                );
+                            }
+
+                            // Load the extruded domain and merge it into the current domain.
+                            if let Some(compiled) = LuDogStore::load_bincode(&compiled_path)
+                                .map_err(|e| {
+                                    errors.push(DwarfError::File {
+                                        source: e,
+                                        description: format!("Attempting to load lu_dog: {module}"),
+                                        location: location!(),
+                                        path: compiled_path.to_owned(),
+                                    });
+                                })
+                                .ok()
+                            {
+                                let fqt = type_root.clone() + &ty;
+                                if compiled.exhume_woog_struct_id_by_name(&fqt).is_some()
+                                    || compiled.exhume_enumeration_id_by_name(&fqt).is_some()
+                                {
+                                    lu_dog.merge(&compiled);
+
+                                    // Update the scopes
+                                    context.scopes.insert(ty.clone(), type_root.clone());
+
+                                    // Update the dirty stuff, even though it doesn't seem to be used.
+                                    if let Some(dirty_file) = fs::File::open(&dirty_path)
+                                        .map_err(|e| {
+                                            errors.push(DwarfError::File {
+                                                source: e,
+                                                description: format!(
+                                                    "Attempting to open dirty file: {module}"
+                                                ),
+                                                location: location!(),
+                                                path: dirty_path.to_owned(),
+                                            })
+                                        })
+                                        .ok()
+                                    {
+                                        let reader = io::BufReader::new(dirty_file);
+                                        if let Some(dirty) = serde_json::from_reader(reader)
+                                            .map_err(|e| {
+                                                errors.push(DwarfError::File {
+                                                    source: io::Error::new(
+                                                        io::ErrorKind::Other,
+                                                        e.to_string(),
+                                                    ),
+                                                    description: format!(
+                                                        "Attempting to read dirty file: {module}"
+                                                    ),
+                                                    location: location!(),
+                                                    path: dirty_path.to_owned(),
+                                                })
+                                            })
+                                            .ok()
+                                        {
+                                            context.dirty.extend::<Vec<Dirty>>(dirty);
+                                        }
+                                    }
+
+                                    return Ok(());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     match fs::read_to_string(&path) {
         Ok(source_code) => {
@@ -3691,7 +3969,7 @@ fn inter_import(
                 Ok(ast) => {
                     let path = format!("{}", path.display());
                     let mut dirty = Vec::new();
-                    // let mut scopes = HashMap::default();
+                    let mut new_lu_dog = LuDogStore::new();
 
                     let mut new_ctx = Context::new(
                         source_code,
@@ -3702,7 +3980,7 @@ fn inter_import(
                         context.models,
                         &mut dirty,
                         location!(),
-                        lu_dog,
+                        &mut new_lu_dog,
                         format!("::{module}::"),
                         context.scopes,
                         context.imports,
@@ -3712,13 +3990,45 @@ fn inter_import(
 
                     // Extrusion time
                     trace!("processing dwarf import");
-                    walk_tree(&ast, &mut new_ctx, import_stack, lu_dog)?;
+                    walk_tree(&ast, &mut new_ctx, import_stack, &mut new_lu_dog)?;
                     trace!("done processing dwarf import");
 
+                    // Persist the beast
+                    let _ = new_lu_dog.persist_bincode(&compiled_path).map_err(|e| {
+                        errors.push(DwarfError::File {
+                            source: e,
+                            description: format!("Attempting to persist lu_dog: {module}"),
+                            location: location!(),
+                            path: compiled_path.to_owned(),
+                        });
+                    });
+
+                    if let Some(dirty_file) = fs::File::create(dirty_path)
+                        .map_err(|e| {
+                            errors.push(DwarfError::File {
+                                source: e,
+                                description: format!("Attempting to create file: {module}"),
+                                location: location!(),
+                                path: compiled_path.to_owned(),
+                            });
+                        })
+                        .ok()
+                    {
+                        let mut writer = io::BufWriter::new(dirty_file);
+                        let _ = serde_json::to_writer(&mut writer, &dirty).map_err(|e| {
+                            errors.push(DwarfError::File {
+                                source: io::Error::new(io::ErrorKind::Other, e.to_string()),
+                                description: format!("Attempting to write dirty file: {module}"),
+                                location: location!(),
+                                path: compiled_path.to_owned(),
+                            });
+                        });
+                    }
+
+                    lu_dog.merge(&new_lu_dog);
+
                     import_stack.pop();
-
                     context.dirty.extend(dirty);
-
                     context.scopes.insert(ty.clone(), type_root);
                 }
                 Err(_) => {
@@ -4355,8 +4665,16 @@ pub(crate) fn lookup_user_defined_type(
     } else if let Some(ref id) = lu_dog.exhume_enumeration_id_by_name(name) {
         // Here too, but for enums.
         let woog_enum = lu_dog.exhume_enumeration(id).unwrap();
-        Some(ValueType::new_enumeration(true, &woog_enum, lu_dog))
-        // 🚧 Don't we need a span here, like above?
+        let ty = ValueType::new_enumeration(true, &woog_enum, lu_dog);
+        LuDogSpan::new(
+            span.end as i64,
+            span.start as i64,
+            &context.source,
+            Some(&ty),
+            None,
+            lu_dog,
+        );
+        Some(ty)
     } else {
         None
     }
@@ -4516,7 +4834,7 @@ pub(super) fn typecheck(
     let rhs = rhs.0;
 
     cfg_if::cfg_if! {
-        if #[cfg(any(feature = "single", feature = "single-vec", feature = "single-vec-tracy", feature="debug"))] {
+        if #[cfg(any(feature = "lu-dog-rc", feature = "single", feature = "single-vec", feature = "single-vec-tracy", feature="debug"))] {
             if std::rc::Rc::as_ptr(lhs) == std::rc::Rc::as_ptr(rhs) {
                 return Ok(());
             }

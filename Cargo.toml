@@ -114,8 +114,8 @@ dotenvy = "0.15.7"
 # [patch.crates-io]
 # puteketeke = { path = "../../github/puteketeke" }
 
-# [patch."https://github.com/uberFoo/sarzak"]
-# sarzak = { path = "../sarzak" }
+[patch."https://github.com/uberFoo/sarzak"]
+sarzak = { path = "../sarzak" }
 
 [dev-dependencies]
 backtrace = "0.3.67"
@@ -132,7 +132,7 @@ default = ["async-executor"]
 single = ["single-vec", "repl", "print-std-out"]
 debug = ["sarzak/lu-dog-rc", "repl", "print-std-out"]
 nd-executor = ["multi-nd-vec", "repl", "print-std-out", "async"]
-async-executor = ["multi-vec", "repl", "print-std-out", "async"]
+async-executor = ["lu-dog-rc", "repl", "print-std-out", "async"]
 
 tracy-client = ["dep:tracy-client"]
 
@@ -157,7 +157,8 @@ tracy = [
     "dep:tracy-client",
 ]
 
-
+lu-dog-rc = ["sarzak/lu-dog-rc"]
+multi-lu-dog = ["sarzak/lu-dog-rwlock"]
 single-vec = ["sarzak/lu-dog-vec"]
 single-vec-tracy = ["sarzak/lu-dog-vec-tracy", "dep:tracy-client"]
 multi-vec = ["sarzak/lu-dog-rwlock-vec"]

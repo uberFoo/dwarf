@@ -30,8 +30,7 @@ use crate::{
     },
     s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty},
-    Context as ExtruderContext, RefType, Span, BUILD_TIME, ERR_CLR, MERLIN, OTHER_CLR, POP_CLR,
-    SARZAK, VERSION,
+    Context as ExtruderContext, RefType, Span, BUILD_TIME, ERR_CLR, OTHER_CLR, POP_CLR, VERSION,
 };
 
 mod error;
@@ -793,7 +792,6 @@ fn get_span(expression: &RefType<Expression>, lu_dog: &LuDogStore) -> Span {
         let read = s_read!(span);
         read.start as usize..read.end as usize
     } else {
-        dbg!(&expression, &value);
         0..0
     };
 
@@ -809,10 +807,9 @@ mod test {
     use test_log::test;
 
     use crate::{
-        bubba::{error::Error, VM},
+        bubba::{error::Error, s_read as ref_read, RefType, VM},
         dwarf::{error::DwarfErrorReporter, new_lu_dog, parse_dwarf},
         sarzak::MODEL as SARZAK_MODEL,
-        RefType,
     };
 
     pub(super) fn get_dwarf_home() -> PathBuf {
@@ -831,7 +828,7 @@ mod test {
 
     pub(super) fn run_vm(program: &Program) -> Result<RefType<Value>, Error> {
         #[cfg(feature = "async")]
-        let mut vm = VM::new(program, &[], &get_dwarf_home(), THREADS, false);
+        let mut vm = VM::new(program, &[], &get_dwarf_home(), THREADS, true);
         #[cfg(not(feature = "async"))]
         let mut vm = VM::new(program, &[], &get_dwarf_home());
         vm.invoke("main", &[])
@@ -880,7 +877,7 @@ mod test {
         assert_eq!(program.get_thonk_card(), 1);
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 8);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(5));
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &Value::Integer(5));
     }
 
     #[test]
@@ -908,7 +905,10 @@ mod test {
         assert_eq!(program.get_thonk_card(), 1);
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 2);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Boolean(true));
+        assert_eq!(
+            &*ref_read!(run_vm(&program).unwrap()),
+            &Value::Boolean(true)
+        );
     }
 
     #[test]
@@ -936,7 +936,10 @@ mod test {
         assert_eq!(program.get_thonk_card(), 1);
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 2);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Boolean(false));
+        assert_eq!(
+            &*ref_read!(run_vm(&program).unwrap()),
+            &Value::Boolean(false)
+        );
     }
 
     #[test]
@@ -977,7 +980,7 @@ mod test {
 
         assert_eq!(program.get_thonk("fib").unwrap().instruction_card(), 30);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(55));
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &Value::Integer(55));
     }
 
     #[test]
@@ -1021,7 +1024,7 @@ mod test {
         let run = run_vm(&program);
         eprintln!("{:?}", run);
         assert!(run.is_ok());
-        assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
+        assert_eq!(&*ref_read!(run.unwrap()), &Value::Boolean(true));
 
         Ok(())
     }
@@ -1054,7 +1057,7 @@ mod test {
         let run = run_vm(&program);
         eprintln!("{:?}", run);
         assert!(run.is_ok());
-        assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
+        assert_eq!(&*ref_read!(run.unwrap()), &Value::Boolean(true));
     }
 
     // #[test]
@@ -1194,7 +1197,7 @@ async fn main() -> Future<()> {
         assert_eq!(program.get_thonk("foo").unwrap().instruction_card(), 12);
         let run = run_vm(&program);
         assert!(run.is_ok());
-        assert_eq!(&*s_read!(run.unwrap()), &Value::Integer(6));
+        assert_eq!(&*ref_read!(run.unwrap()), &Value::Integer(6));
     }
 
     #[test]
@@ -1231,6 +1234,6 @@ async fn main() -> Future<()> {
 
         let run = run_vm(&program);
         assert!(run.is_ok());
-        assert_eq!(&*s_read!(run.unwrap()), &Value::Integer(0));
+        assert_eq!(&*ref_read!(run.unwrap()), &Value::Integer(0));
     }
 }

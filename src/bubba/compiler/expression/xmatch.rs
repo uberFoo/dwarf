@@ -26,7 +26,23 @@ pub(in crate::bubba::compiler) fn compile(
     let match_expr = lu_dog.exhume_x_match(expr).unwrap();
     let match_expr = s_read!(match_expr);
 
-    let patterns = match_expr.r87_pattern(&lu_dog);
+    // This only returns the first one found. That's a bug.
+    let mut pattern = match_expr.r87_pattern(&lu_dog)[0].clone();
+    let mut patterns = Vec::new();
+    // Iterate over the previous until we reach the beginning.
+    while !s_read!(pattern).r256c_pattern(&lu_dog).is_empty() {
+        let pat = s_read!(pattern).r256c_pattern(&lu_dog)[0].clone();
+        pattern = pat;
+    }
+
+    patterns.push(pattern.clone());
+
+    while !s_read!(pattern).r256_pattern(&lu_dog).is_empty() {
+        let pat = s_read!(pattern).r256_pattern(&lu_dog)[0].clone();
+        pattern = pat;
+        patterns.push(pattern.clone());
+    }
+
     let scrutinee = match_expr.r91_expression(&lu_dog)[0].clone();
 
     let label = format!("{}", Uuid::new_v4());
@@ -208,20 +224,24 @@ pub(in crate::bubba::compiler) fn compile(
 
 #[cfg(test)]
 mod test {
-    use std::env;
+    use std::{
+        env,
+        sync::{Arc, RwLock},
+    };
 
     use test_log::test;
 
     use crate::{
-        bubba::compiler::{
-            test::{get_dwarf_home, run_vm, setup_logging},
-            *,
+        bubba::{
+            compiler::{
+                test::{get_dwarf_home, run_vm, setup_logging},
+                *,
+            },
+            new_ref, s_read as ref_read, RefType,
         },
         chacha::value::{Enum, TupleEnum},
         dwarf::{new_lu_dog, parse_dwarf},
-        new_ref,
         sarzak::MODEL as SARZAK_MODEL,
-        NewRef,
     };
 
     #[test]
@@ -255,7 +275,7 @@ mod test {
 
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 31);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(1));
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &Value::Integer(1));
     }
 
     #[test]
@@ -292,7 +312,7 @@ mod test {
 
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 33);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &4.into());
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &4.into());
     }
 
     #[test]
@@ -326,7 +346,7 @@ mod test {
 
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 29);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &3.into());
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &3.into());
     }
 
     #[test]
@@ -361,7 +381,7 @@ mod test {
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 31);
 
         assert_eq!(
-            &*s_read!(run_vm(&program).unwrap()),
+            &*ref_read!(run_vm(&program).unwrap()),
             &Value::String("foo".to_owned())
         );
     }
@@ -410,8 +430,12 @@ mod test {
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 32);
 
         assert_eq!(
-            &*s_read!(run_vm(&program).unwrap()),
-            &Value::Enumeration(Enum::Unit(ty, "::Foo".to_owned(), "Bar".to_owned()))
+            &*ref_read!(run_vm(&program).unwrap()),
+            &Value::Enumeration(Enum::Unit(
+                Arc::new(RwLock::new(s_read!(ty).clone())),
+                "::Foo".to_owned(),
+                "Bar".to_owned()
+            ))
         );
     }
 
@@ -450,7 +474,7 @@ mod test {
             .unwrap();
         let woog_enum = s_read!(lu_dog).exhume_enumeration(&id).unwrap();
         let ty = ValueType::new_enumeration(true, &woog_enum, &mut s_write!(lu_dog));
-        let user_enum = TupleEnum::new("Bar", new_ref!(Value, Value::Integer(42)));
+        let user_enum = TupleEnum::new("Bar", new_ref!(Value, 42.into()));
         let user_enum = new_ref!(TupleEnum<Value>, user_enum);
 
         let program = compile(&ctx, true).unwrap();
@@ -461,8 +485,14 @@ mod test {
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 65);
 
         assert_eq!(
-            &*s_read!(run_vm(&program).unwrap()),
-            &Value::Enumeration(Enum::Tuple((ty, "::Foo".to_owned()), user_enum))
+            &*ref_read!(run_vm(&program).unwrap()),
+            &Value::Enumeration(Enum::Tuple(
+                (
+                    Arc::new(RwLock::new(s_read!(ty).clone())),
+                    "::Foo".to_owned()
+                ),
+                user_enum
+            ))
         );
     }
 
@@ -502,7 +532,7 @@ mod test {
 
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 50);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(42));
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &Value::Integer(42));
     }
 
     #[test]
@@ -541,7 +571,7 @@ mod test {
 
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 56);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(42));
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &Value::Integer(42));
     }
 
     #[test]
@@ -586,7 +616,7 @@ mod test {
 
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 58);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(42));
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &Value::Integer(42));
     }
 
     #[test]

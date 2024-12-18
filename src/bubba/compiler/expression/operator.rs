@@ -250,9 +250,12 @@ mod test {
     use std::env;
 
     use crate::{
-        bubba::compiler::{
-            test::{get_dwarf_home, run_vm, setup_logging},
-            *,
+        bubba::{
+            compiler::{
+                test::{get_dwarf_home, run_vm, setup_logging},
+                *,
+            },
+            s_read as ref_read,
         },
         dwarf::{new_lu_dog, parse_dwarf},
         sarzak::MODEL as SARZAK_MODEL,
@@ -271,7 +274,8 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
         let program = compile(&ctx, true).unwrap();
@@ -282,7 +286,7 @@ true,            &sarzak,
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 4);
 
         assert_eq!(
-            &*s_read!(run_vm(&program).unwrap()),
+            &*ref_read!(run_vm(&program).unwrap()),
             &Value::String("Hello, world!".to_owned())
         );
     }
@@ -300,7 +304,8 @@ true,            &sarzak,
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
         let program = compile(&ctx, true).unwrap();
@@ -310,7 +315,7 @@ true,            &sarzak,
         assert_eq!(program.get_thonk_card(), 1);
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 4);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(3));
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &Value::Integer(3));
     }
 
     #[test]
@@ -326,7 +331,8 @@ true,            &sarzak,
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
 
@@ -337,7 +343,7 @@ true,            &sarzak,
         assert_eq!(program.get_thonk_card(), 1);
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 4);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(10));
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &Value::Integer(10));
     }
 
     #[test]
@@ -353,7 +359,8 @@ true,            &sarzak,
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
 
@@ -364,7 +371,7 @@ true,            &sarzak,
         assert_eq!(program.get_thonk_card(), 1);
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 4);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(2));
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &Value::Integer(2));
     }
 
     #[test]
@@ -382,7 +389,8 @@ true,            &sarzak,
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
 
@@ -393,7 +401,7 @@ true,            &sarzak,
         assert_eq!(program.get_thonk_card(), 1);
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 6);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(10));
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &Value::Integer(10));
     }
 
     #[test]
@@ -410,7 +418,8 @@ true,            &sarzak,
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
         let program = compile(&ctx, true).unwrap();
@@ -420,7 +429,7 @@ true,            &sarzak,
 
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 4);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &true.into());
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &true.into());
     }
 
     #[test]
@@ -437,7 +446,8 @@ true,            &sarzak,
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
         let program = compile(&ctx, true).unwrap();
@@ -447,7 +457,7 @@ true,            &sarzak,
 
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 4);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &true.into());
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &true.into());
     }
 
     #[test]
@@ -464,7 +474,8 @@ true,            &sarzak,
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
         let program = compile(&ctx, true).unwrap();
@@ -474,7 +485,7 @@ true,            &sarzak,
 
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 3);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &true.into());
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &true.into());
     }
 
     #[test]
@@ -496,7 +507,8 @@ true,            &sarzak,
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
 
@@ -509,7 +521,7 @@ true,            &sarzak,
         let result = run_vm(&program);
         assert!(result.is_ok());
 
-        assert_eq!(&*s_read!(result.unwrap()), &43.into());
+        assert_eq!(&*ref_read!(result.unwrap()), &43.into());
     }
 
     #[test]
@@ -527,7 +539,8 @@ true,            &sarzak,
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
 
@@ -540,6 +553,6 @@ true,            &sarzak,
         let result = run_vm(&program);
         assert!(result.is_ok());
 
-        assert_eq!(&*s_read!(result.unwrap()), &true.into());
+        assert_eq!(&*ref_read!(result.unwrap()), &true.into());
     }
 }

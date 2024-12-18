@@ -13,7 +13,6 @@ use dwarf::{
         VM,
     },
     dwarf::{new_lu_dog, parse_dwarf},
-    s_read,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
 
@@ -175,7 +174,7 @@ fn run_program(test: &str, program: &str, cwd: &PathBuf) -> Result<(BubbaValue, 
 
     let result = match vm.invoke("main", &[]) {
         Ok(value) => {
-            let value = s_read!(value).clone();
+            let value = value.read().unwrap().clone();
 
             match value {
                 BubbaValue::Error(msg) => {

@@ -82,9 +82,12 @@ mod test {
     use std::env;
 
     use crate::{
-        bubba::compiler::{
-            test::{get_dwarf_home, run_vm, setup_logging},
-            *,
+        bubba::{
+            compiler::{
+                test::{get_dwarf_home, run_vm, setup_logging},
+                *,
+            },
+            s_read as ref_read,
         },
         dwarf::{new_lu_dog, parse_dwarf},
         sarzak::MODEL as SARZAK_MODEL,
@@ -107,7 +110,8 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
 
@@ -119,7 +123,7 @@ true,            &sarzak,
 
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 8);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(1));
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &Value::Integer(1));
     }
 
     #[test]
@@ -139,7 +143,8 @@ true,            &sarzak,
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
 
@@ -151,7 +156,7 @@ true,            &sarzak,
 
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 8);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(2));
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &Value::Integer(2));
     }
 
     #[test]
@@ -189,7 +194,8 @@ true,            &sarzak,
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
 
@@ -200,6 +206,6 @@ true,            &sarzak,
 
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 72);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(1));
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &Value::Integer(1));
     }
 }

@@ -33,9 +33,12 @@ mod test {
     use std::env;
 
     use crate::{
-        bubba::compiler::{
-            test::{get_dwarf_home, run_vm, setup_logging},
-            *,
+        bubba::{
+            compiler::{
+                test::{get_dwarf_home, run_vm, setup_logging},
+                *,
+            },
+            s_read as ref_read,
         },
         dwarf::{new_lu_dog, parse_dwarf},
         sarzak::MODEL as SARZAK_MODEL,
@@ -54,7 +57,8 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
         let program = compile(&ctx, true).unwrap();
@@ -81,10 +85,10 @@ true,            &sarzak,
                    }
                        "#;
 
-        let mut ast = parse_dwarf("format_string_with_func_call", ore);
+        let mut ast = parse_dwarf("format_string", ore);
         while let Err(e) = ast {
             eprintln!("{}", e);
-            ast = parse_dwarf("format_string_with_func_call", ore);
+            ast = parse_dwarf("format_string", ore);
         }
 
         let ast = ast.unwrap();
@@ -95,18 +99,19 @@ true,            &sarzak,
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
         let program = compile(&ctx, true).unwrap();
         println!("{program}");
         assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_instruction_card(), 25);
+        assert_eq!(program.get_instruction_card(), 27);
 
         let run = run_vm(&program);
         assert!(run.is_ok());
         assert_eq!(
-            &*s_read!(run.unwrap()),
+            &*ref_read!(run.unwrap()),
             &Value::String("MOTD: Hello world!, the magic number is 42.".to_owned())
         );
     }
@@ -123,15 +128,15 @@ true,            &sarzak,
             }
         }
 
-                   fn main() -> string {
-                    let x = Foo {};
-                       let y = "Hello";
-                       let z = "world";
-                       let α = "MOTD: ${y} ${z}!, the magic number is ${x.magic()}.";
-                       print(α);
-                        α
-                   }
-                       "#;
+        fn main() -> string {
+            let x = Foo {};
+            let y = "Hello";
+            let z = "world";
+            let α = "MOTD: ${y} ${z}!, the magic number is ${x.magic()}.";
+            print(α);
+            α
+        }
+"#;
 
         let mut ast = parse_dwarf("format_string_with_func_call", ore);
         while let Err(e) = ast {
@@ -147,18 +152,19 @@ true,            &sarzak,
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
         let program = compile(&ctx, true).unwrap();
         println!("{program}");
         assert_eq!(program.get_thonk_card(), 2);
-        assert_eq!(program.get_instruction_card(), 32);
+        assert_eq!(program.get_instruction_card(), 34);
 
         let run = run_vm(&program);
         assert!(run.is_ok());
         assert_eq!(
-            &*s_read!(run.unwrap()),
+            &*ref_read!(run.unwrap()),
             &Value::String("MOTD: Hello world!, the magic number is 42.".to_owned())
         );
     }

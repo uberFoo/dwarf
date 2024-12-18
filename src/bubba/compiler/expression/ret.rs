@@ -35,9 +35,12 @@ mod test {
     use std::env;
 
     use crate::{
-        bubba::compiler::{
-            test::{get_dwarf_home, run_vm, setup_logging},
-            *,
+        bubba::{
+            compiler::{
+                test::{get_dwarf_home, run_vm, setup_logging},
+                *,
+            },
+            s_read as ref_read,
         },
         dwarf::{new_lu_dog, parse_dwarf},
         sarzak::MODEL as SARZAK_MODEL,
@@ -57,7 +60,8 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
         let program = compile(&ctx, true).unwrap();
@@ -66,6 +70,6 @@ true,            &sarzak,
         let result = run_vm(&program);
         assert!(result.is_ok());
 
-        assert_eq!(&*s_read!(result.unwrap()), &42.into());
+        assert_eq!(&*ref_read!(result.unwrap()), &42.into());
     }
 }

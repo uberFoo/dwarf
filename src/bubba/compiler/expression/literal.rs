@@ -143,6 +143,7 @@ pub(in crate::bubba::compiler) fn compile(
             let literal = lu_dog.exhume_integer_literal(literal).unwrap();
             let value = s_read!(literal).x_value;
             let value = Value::Integer(value);
+            tracing::debug!(target: "instr", "value: {value:?}");
             thonk.insert_instruction_with_span(Instruction::Push(value), span, location!());
 
             context.get_type(INTEGER).unwrap().clone()
@@ -228,7 +229,8 @@ fn main() {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak,
+            true,
+            &sarzak,
         )
         .unwrap();
 

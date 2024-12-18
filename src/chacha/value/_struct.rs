@@ -3,7 +3,11 @@ use std::fmt;
 use rustc_hash::FxHashMap as HashMap;
 use serde::{Deserialize, Serialize};
 
-use crate::{lu_dog::ValueType, s_read, RefType, PATH_SEP};
+use crate::{
+    bubba::{s_read, RefType},
+    lu_dog::ValueType,
+    PATH_SEP,
+};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Struct<T>
@@ -20,7 +24,10 @@ where
     T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
 {
     fn eq(&self, other: &Self) -> bool {
-        s_read!(self.type_).eq(&s_read!(other.type_)) && self.attrs.eq(&other.attrs)
+        s_read!(self.type_)
+            .subtype
+            .eq(&s_read!(other.type_).subtype)
+            && self.attrs.eq(&other.attrs)
     }
 }
 

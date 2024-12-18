@@ -2,11 +2,9 @@ use std::{env, fs, path::PathBuf};
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use dwarf::{
-    bubba::{compiler::compile, value::Value as BubbaValue, VM},
+    bubba::{compiler::compile, VM},
     dwarf::{new_lu_dog, parse_dwarf},
-    new_ref,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
-    NewRef, RefType,
 };
 #[cfg(feature = "tracy")]
 use tracy_client::Client;
@@ -35,17 +33,18 @@ fn fib_vm(c: &mut Criterion) {
         Some((source, &ast)),
         &dwarf_home,
         &env::current_dir().unwrap(),
+        false,
         &sarzak,
     )
     .unwrap();
 
-    let Ok(program) = compile(&lu_dog_ctx) else {
+    let Ok(program) = compile(&lu_dog_ctx, false) else {
         panic!("Failed to compile program");
     };
 
     let args = vec![
-        new_ref!(BubbaValue, "fib".into()),
-        new_ref!(BubbaValue, "17".into()),
+        std::sync::Arc::new(std::sync::RwLock::new("fib".into())),
+        std::sync::Arc::new(std::sync::RwLock::new(17.into())),
     ];
     #[cfg(feature = "async")]
     let mut vm = VM::new(&program, &args, &PathBuf::new(), num_cpus::get(), false);
@@ -54,8 +53,8 @@ fn fib_vm(c: &mut Criterion) {
     c.bench_function("fib-vm-17", |b| b.iter(|| vm.invoke("main", &[]).unwrap()));
 
     let args = vec![
-        new_ref!(BubbaValue, "fib".into()),
-        new_ref!(BubbaValue, "28".into()),
+        std::sync::Arc::new(std::sync::RwLock::new("fib".into())),
+        std::sync::Arc::new(std::sync::RwLock::new(28.into())),
     ];
     #[cfg(feature = "async")]
     let mut vm = VM::new(&program, &args, &PathBuf::new(), num_cpus::get(), false);
@@ -64,8 +63,8 @@ fn fib_vm(c: &mut Criterion) {
     c.bench_function("fib-vm-28", |b| b.iter(|| vm.invoke("main", &[]).unwrap()));
 
     let args = vec![
-        new_ref!(BubbaValue, "fib".into()),
-        new_ref!(BubbaValue, "5".into()),
+        std::sync::Arc::new(std::sync::RwLock::new("fib".into())),
+        std::sync::Arc::new(std::sync::RwLock::new(5.into())),
     ];
     #[cfg(feature = "async")]
     let mut vm = VM::new(&program, &args, &PathBuf::new(), num_cpus::get(), false);
@@ -95,11 +94,12 @@ fn loop_vm(c: &mut Criterion) {
         Some((source, &ast)),
         &dwarf_home,
         &env::current_dir().unwrap(),
+        false,
         &sarzak,
     )
     .unwrap();
 
-    let Ok(program) = compile(&lu_dog_ctx) else {
+    let Ok(program) = compile(&lu_dog_ctx, false) else {
         panic!("Failed to compile program");
     };
     #[cfg(feature = "async")]

@@ -3,7 +3,6 @@ use std::{
     env,
     path::{Path, PathBuf},
     sync::Mutex,
-    thread,
 };
 
 #[cfg(feature = "async")]
@@ -29,8 +28,9 @@ use threadpool::ThreadPool;
 use crate::{
     bubba::{
         error::{BubbaError, Error, Result},
+        new_ref, s_read as ref_read, s_write,
         value::Value,
-        STRING,
+        RefType, STRING,
     },
     chacha::{
         ffi_value::FfiValue,
@@ -38,11 +38,9 @@ use crate::{
     },
     keywords::{INVOKE_FUNC, INVOKE_FUNC_MUT, NONE, OPTION, OPTION_TYPE, RESULT_TYPE, SOME},
     lu_dog::{ValueType, ValueTypeEnum},
-    new_ref,
     plug_in::{Error as FfiError, LambdaCall, PluginModRef, PluginType},
-    s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty, MODEL as SARZAK_MODEL},
-    DwarfInteger, NewRef, RefType, Span, LAMBDA_FUNCS,
+    DwarfInteger, Span, LAMBDA_FUNCS,
 };
 
 use super::instr::{Instruction, Program};
@@ -72,7 +70,7 @@ impl StackValue {
     #[inline]
     fn into_value(self) -> Value {
         match self {
-            StackValue::Pointer(p) => s_read!(p).clone(),
+            StackValue::Pointer(p) => ref_read!(p).clone(),
             StackValue::Value(v) => v,
         }
     }
@@ -81,7 +79,9 @@ impl StackValue {
 impl PartialEq for StackValue {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (StackValue::Pointer(p1), StackValue::Pointer(p2)) => &*s_read!(p1) == &*s_read!(p2),
+            (StackValue::Pointer(p1), StackValue::Pointer(p2)) => {
+                &*ref_read!(p1) == &*ref_read!(p2)
+            }
             (StackValue::Value(v1), StackValue::Value(v2)) => v1 == v2,
             _ => false,
         }
@@ -100,7 +100,7 @@ impl Clone for StackValue {
 impl std::fmt::Display for StackValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            StackValue::Pointer(p) => write!(f, "{}", *s_read!(p)),
+            StackValue::Pointer(p) => write!(f, "{}", *ref_read!(p)),
             StackValue::Value(v) => write!(f, "{}", v),
         }
     }
@@ -292,7 +292,7 @@ impl VM {
             let result = self.invoke_lambda(&λ, &args);
 
             let result = match result {
-                Ok(value) => ROk(<Value as Into<FfiValue>>::into(s_read!(value).clone())),
+                Ok(value) => ROk(<Value as Into<FfiValue>>::into(ref_read!(value).clone())),
                 Err(e) => RErr(FfiError::Plugin(e.to_string().into())),
             };
             lambda_call.result.send(result).unwrap();
@@ -553,15 +553,15 @@ impl VM {
 
                             match method.as_str() {
                                 INVOKE_FUNC => {
-                                    let plugin = s_read!(plugin);
+                                    let plugin = ref_read!(plugin);
                                     let args = stack.pop().clone().unwrap().into_value();
                                     let Value::List { inner, .. } = args else {
                                         panic!("Expected a vector of arguments.")
                                     };
-                                    let args = s_read!(inner)
+                                    let args = ref_read!(inner)
                                         .iter()
                                         .map(|v| {
-                                            <Value as Into<FfiValue>>::into(s_read!(v).clone())
+                                            <Value as Into<FfiValue>>::into(ref_read!(v).clone())
                                         })
                                         .collect::<Vec<FfiValue>>();
                                     let func = stack.pop().clone().unwrap().into_value();
@@ -604,10 +604,10 @@ impl VM {
                                     let Value::List { inner, .. } = args else {
                                         panic!("Expected a vector of arguments.")
                                     };
-                                    let args = s_read!(inner)
+                                    let args = ref_read!(inner)
                                         .iter()
                                         .map(|v| {
-                                            <Value as Into<FfiValue>>::into(s_read!(v).clone())
+                                            <Value as Into<FfiValue>>::into(ref_read!(v).clone())
                                         })
                                         .collect::<Vec<FfiValue>>();
                                     let func = stack.pop().clone().unwrap().into_value();
@@ -723,7 +723,7 @@ impl VM {
                             // let result = self.inner_run(arity, local_count, trace)?;
 
                             // Move the frame pointer back
-                            // fp = (&*s_read!(stack[fp])).try_into().unwrap();
+                            // fp = (&*ref_read!(stack[fp])).try_into().unwrap();
                             // fp = old_fp;
                             // ip = old_ip;
 
@@ -746,7 +746,7 @@ impl VM {
                         // Maybe this could be configurable? Feature flag? Maybe
                         // even something at runtime, although we'd need to see
                         // how much that extra condition costs.
-                        // let value = s_read!(captures[*from]).clone();
+                        // let value = ref_read!(captures[*from]).clone();
                         let value = captures[*from].clone();
                         stack[fp - arity - local_count - 3 + to] = value.into();
 
@@ -763,75 +763,6 @@ impl VM {
 
                         1
                     }
-                    // Instruction::DeconstructStructExpression => {
-                    //     fn decode_expression(
-                    //         value: RefType<Value>,
-                    //     ) -> Result<(RefType<Value>, Option<RefType<Value>>)>
-                    //     {
-                    //         let read = s_read!(value);
-                    //         match &*read {
-                    //             Value::Enumeration(value) => match value {
-                    //                 // 🚧 I can't tell if this is gross, or a sweet hack.
-                    //                 // I think I'm referring to using the name as the scrutinee?
-                    //                 EnumVariant::Unit(_, ty, value) => Ok((
-                    //                     new_ref!(Value, Value::String(ty.to_owned())),
-                    //                     Some(new_ref!(Value, Value::String(value.to_owned()))),
-                    //                 )),
-                    //                 // EnumFieldVariant::Struct(value) => (
-                    //                 //     *value.type_name().to_owned(),
-                    //                 //     Some(*value.get_value()),
-                    //                 // ),
-                    //                 EnumVariant::Tuple((ty, path), value) => {
-                    //                     let path = path.split(PATH_SEP).collect::<Vec<&str>>();
-                    //                     let mut path = VecDeque::from(path);
-                    //                     let name = path.pop_front().unwrap().to_owned();
-                    //                     if name.is_empty() {
-                    //                         Ok((
-                    //                             new_ref!(
-                    //                                 Value,
-                    //                                 Value::String(
-                    //                                     s_read!(value).variant().to_owned()
-                    //                                 )
-                    //                             ),
-                    //                             Some(s_read!(value).value().clone()),
-                    //                         ))
-                    //                     } else {
-                    //                         Ok((
-                    //                             new_ref!(Value, Value::String(name)),
-                    //                             Some(new_ref!(
-                    //                                 Value,
-                    //                                 Value::Enumeration(EnumVariant::Tuple(
-                    //                                     (
-                    //                                         ty.clone(),
-                    //                                         path.into_iter()
-                    //                                             .collect::<Vec<&str>>()
-                    //                                             .join(PATH_SEP)
-                    //                                     ),
-                    //                                     value.clone(),
-                    //                                 ))
-                    //                             )),
-                    //                         ))
-                    //                     }
-                    //                 }
-                    //                 _ => unimplemented!(),
-                    //             },
-                    //             _ => Ok((value.clone(), None)),
-                    //         }
-                    //     }
-
-                    //     let mut variant = stack.pop().unwrap();
-                    //     while let Ok((name, value)) = decode_expression(variant.into_pointer()) {
-                    //         dbg!(&name, &value);
-                    //         stack.push(name.into());
-                    //         if let Some(value) = value {
-                    //             variant = value.into();
-                    //         } else {
-                    //             break;
-                    //         }
-                    //     }
-
-                    //     1
-                    // }
                     Instruction::Divide => {
                         let b = stack.pop().unwrap();
                         let a = stack.pop().unwrap();
@@ -872,7 +803,7 @@ impl VM {
                                 stack.push(Value::String(value.to_owned()).into());
                             }
                             Enum::Tuple(_, value) => {
-                                stack.push(s_read!(value).value().clone().into());
+                                stack.push(ref_read!(value).value().clone().into());
                             }
                             _ => unimplemented!(),
                         }
@@ -1048,11 +979,11 @@ impl VM {
                         let index = stack.pop().unwrap().into_value();
                         let list = stack.pop().unwrap();
                         let list = list.into_pointer();
-                        let list = s_read!(list);
+                        let list = ref_read!(list);
                         let index: usize = index.try_into()?;
                         match &*list {
                             Value::AnyList(vec) => {
-                                let vec = s_read!(vec);
+                                let vec = ref_read!(vec);
                                 if index < vec.len() {
                                     stack.push(vec[index].clone().into());
                                 } else {
@@ -1071,7 +1002,7 @@ impl VM {
                                 }
                             }
                             Value::List { ty: _, inner: vec } => {
-                                let vec = s_read!(vec);
+                                let vec = ref_read!(vec);
                                 if index < vec.len() {
                                     stack.push(vec[index].clone().into());
                                 } else {
@@ -1128,11 +1059,11 @@ impl VM {
                         let end: usize = stack.pop().unwrap().into_value().try_into()?;
                         let list = stack.pop().unwrap();
                         let list = list.into_pointer();
-                        let list = s_read!(list);
+                        let list = ref_read!(list);
 
                         match &*list {
                             Value::List { ty, inner: vec } => {
-                                let vec = s_read!(vec);
+                                let vec = ref_read!(vec);
                                 if end < vec.len() {
                                     let list = new_ref!(
                                         Value,
@@ -1194,13 +1125,13 @@ impl VM {
                         let sep = stack.pop().unwrap();
                         let list = stack.pop().unwrap();
                         let list = list.into_pointer();
-                        let list = s_read!(list);
+                        let list = ref_read!(list);
                         match &*list {
                             Value::List { inner, .. } => {
-                                let inner = s_read!(inner);
+                                let inner = ref_read!(inner);
                                 let result = inner
                                     .iter()
-                                    .map(|v| s_read!(v).to_inner_string())
+                                    .map(|v| ref_read!(v).to_inner_string())
                                     .collect::<Vec<String>>()
                                     .join(sep.into_value().to_inner_string().as_str());
                                 stack.push(Value::String(result).into());
@@ -1213,18 +1144,18 @@ impl VM {
                     Instruction::ListLength => {
                         let list = stack.pop().unwrap();
                         let list = list.into_pointer();
-                        let list = s_read!(list);
+                        let list = ref_read!(list);
                         match &*list {
                             Value::AnyList(vec) => {
-                                let vec = s_read!(vec);
+                                let vec = ref_read!(vec);
                                 stack.push(Value::Integer(vec.len() as DwarfInteger).into());
                             }
                             Value::List { inner, .. } => {
-                                let inner = s_read!(inner);
+                                let inner = ref_read!(inner);
                                 stack.push(Value::Integer(inner.len() as DwarfInteger).into());
                             }
                             Value::Map { inner } => {
-                                let inner = s_read!(inner);
+                                let inner = ref_read!(inner);
                                 stack.push(Value::Integer(inner.len() as DwarfInteger).into());
                             }
                             Value::String(str) => {
@@ -1241,13 +1172,15 @@ impl VM {
 
                         let list = stack.pop().unwrap();
                         let list = list.into_pointer();
-                        let list = s_read!(list);
+                        let list = ref_read!(list);
                         match &*list {
                             Value::AnyList(vec) => {
-                                let vec = s_read!(vec);
+                                let vec = ref_read!(vec);
                                 let result = vec
                                     .iter()
-                                    .map(|v| self.invoke_lambda(&lambda, &vec![s_read!(v).clone()]))
+                                    .map(|v| {
+                                        self.invoke_lambda(&lambda, &vec![ref_read!(v).clone()])
+                                    })
                                     .collect::<Result<Vec<RefType<Value>>>>()?;
                                 let result = new_ref!(
                                     Value,
@@ -1255,11 +1188,13 @@ impl VM {
                                 );
                                 stack.push(result.into());
                             }
-                            Value::List { inner, ty } => {
-                                let inner = s_read!(inner);
+                            Value::List { ty, inner } => {
+                                let inner = ref_read!(inner);
                                 let result = inner
                                     .iter()
-                                    .map(|v| self.invoke_lambda(&lambda, &vec![s_read!(v).clone()]))
+                                    .map(|v| {
+                                        self.invoke_lambda(&lambda, &vec![ref_read!(v).clone()])
+                                    })
                                     .collect::<Result<Vec<RefType<Value>>>>()?;
                                 stack.push(
                                     Value::List {
@@ -1278,7 +1213,7 @@ impl VM {
                         let element = stack.pop().unwrap();
                         let list = stack.pop().unwrap();
                         let list = list.into_pointer();
-                        match &*s_read!(list) {
+                        match &*ref_read!(list) {
                             Value::List { inner, .. } => {
                                 let mut inner = s_write!(inner);
                                 inner.push(element.into_pointer());
@@ -1318,10 +1253,10 @@ impl VM {
 
                         let map = stack.pop().unwrap();
                         let map = map.into_pointer();
-                        let map = s_read!(map);
+                        let map = ref_read!(map);
                         match &*map {
                             Value::Map { inner, .. } => {
-                                let inner = s_read!(inner);
+                                let inner = ref_read!(inner);
                                 let ty = program.get_symbol(OPTION_TYPE).expect(
                                     "The {OPTION_TYPE} symbol is missing from the program.",
                                 );
@@ -1382,10 +1317,10 @@ impl VM {
                     Instruction::MapLength => {
                         let map = stack.pop().unwrap();
                         let map = map.into_pointer();
-                        let map = s_read!(map);
+                        let map = ref_read!(map);
                         match &*map {
                             Value::Map { inner, .. } => {
-                                let inner = s_read!(inner);
+                                let inner = ref_read!(inner);
                                 stack.push(Value::Integer(inner.len() as DwarfInteger).into());
                             }
                             _ => panic!("Expected a map."),
@@ -1404,7 +1339,7 @@ impl VM {
                             let ty = match ty.into_value() {
                                 Value::Enumeration(variant) => match variant {
                                     Enum::Struct(ty) => {
-                                        let ty = s_read!(ty);
+                                        let ty = ref_read!(ty);
                                         let name = ty.type_name();
                                         name.to_owned()
                                     }
@@ -1907,7 +1842,7 @@ impl VM {
                         1
                     }
                     Instruction::TypeCast(as_ty) => {
-                        let Value::ValueType(as_ty) = &*s_read!(as_ty) else {
+                        let Value::ValueType(as_ty) = &*ref_read!(as_ty) else {
                             return Err(BubbaError::VmPanic {
                                 message: format!(
                                     "Expected a ValueType, but got: {as_ty:?}.",
@@ -1921,7 +1856,7 @@ impl VM {
 
                         let lhs = stack.pop().unwrap();
                         let lhs = lhs.into_pointer();
-                        let lhs = s_read!(lhs);
+                        let lhs = ref_read!(lhs);
 
                         let value = match &as_ty.subtype {
                             ValueTypeEnum::List(_) => {
@@ -2002,7 +1937,7 @@ impl VM {
     ) -> Result<()> {
         use puteketeke::AsyncTask;
 
-        use crate::ValueResult;
+        use crate::bubba::value::ValueResult;
 
         let callee = &stack[stack.len() - func_arity - 2].clone();
         let stack_local_count = &stack[stack.len() - func_arity - 1].clone();
@@ -2189,7 +2124,9 @@ mod tests {
     #[cfg(feature = "tracy")]
     use tracy_client::Client;
 
-    use crate::{bubba::instr::Thonk, dwarf::DwarfInteger, lu_dog::ObjectStore as LuDogStore};
+    use crate::{
+        bubba::instr::Thonk, dwarf::DwarfInteger, lu_dog::ObjectStore as LuDogStore, s_read,
+    };
 
     use super::*;
 
@@ -2253,7 +2190,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let as_int: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
+        let as_int: DwarfInteger = (&*ref_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(as_int, 42);
 
         // let mut frame = vm.frames.pop();
@@ -2291,7 +2228,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let as_int: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
+        let as_int: DwarfInteger = (&*ref_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(as_int, 111);
 
         // let mut frame = vm.frames.pop();
@@ -2329,7 +2266,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let as_int: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
+        let as_int: DwarfInteger = (&*ref_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(as_int, 42);
 
         // assert_eq!(frame.ip, 4);
@@ -2366,7 +2303,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let as_int: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
+        let as_int: DwarfInteger = (&*ref_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(as_int, 2898);
     }
 
@@ -2402,7 +2339,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let as_bool: bool = (&*s_read!(result.unwrap())).try_into().unwrap();
+        let as_bool: bool = (&*ref_read!(result.unwrap())).try_into().unwrap();
         assert!(!as_bool);
 
         // assert_eq!(frame.ip, 4);
@@ -2437,7 +2374,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let as_bool: bool = (&*s_read!(result.unwrap())).try_into().unwrap();
+        let as_bool: bool = (&*ref_read!(result.unwrap())).try_into().unwrap();
         assert!(as_bool);
 
         // assert_eq!(frame.ip, 4);
@@ -2472,7 +2409,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let as_bool: bool = (&*s_read!(result.unwrap())).try_into().unwrap();
+        let as_bool: bool = (&*ref_read!(result.unwrap())).try_into().unwrap();
         assert!(as_bool);
 
         // let mut frame = vm.frames.pop();
@@ -2520,7 +2457,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let result: String = (&*s_read!(result.unwrap())).try_into().unwrap();
+        let result: String = (&*ref_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(result, "you rock!");
 
         // let mut frame = vm.frames.pop();
@@ -2559,7 +2496,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let result: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
+        let result: DwarfInteger = (&*ref_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(result, 42);
     }
 }

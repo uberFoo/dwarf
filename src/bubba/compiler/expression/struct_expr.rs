@@ -1,3 +1,5 @@
+use std::sync::{Arc, RwLock};
+
 use snafu::{location, Location};
 
 use crate::{
@@ -67,7 +69,11 @@ pub(in crate::bubba::compiler) fn compile(
                 // be? Now that I think of it, I think the implementation of the nte instruction
                 // checks the cardinality of the fields, and if it's zero it generates a
                 // unit enum. So that's two fishy things.
-                let value = Value::Enumeration(Enum::Unit(ty, path, s_read!(pe).name.to_owned()));
+                let value = Value::Enumeration(Enum::Unit(
+                    Arc::new(RwLock::new(s_read!(ty).clone())),
+                    path,
+                    s_read!(pe).name.to_owned(),
+                ));
                 thonk.insert_instruction(Instruction::Push(value), location!());
             } else {
                 let field_count = field_exprs.len();
@@ -137,12 +143,18 @@ pub(in crate::bubba::compiler) fn compile(
 
 #[cfg(test)]
 mod test {
-    use std::env;
+    use std::{
+        env,
+        sync::{Arc, RwLock},
+    };
 
     use crate::{
-        bubba::compiler::{
-            test::{get_dwarf_home, run_vm, setup_logging},
-            *,
+        bubba::{
+            compiler::{
+                test::{get_dwarf_home, run_vm, setup_logging},
+                *,
+            },
+            s_read as ref_read,
         },
         chacha::value::Struct,
         dwarf::{new_lu_dog, parse_dwarf},
@@ -171,7 +183,8 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-true,            &sarzak_store,
+            true,
+            &sarzak_store,
         )
         .unwrap();
         let program = compile(&ctx, true).unwrap();
@@ -186,11 +199,12 @@ true,            &sarzak_store,
         let woog_struct = lu_dog.exhume_woog_struct_id_by_name("::Foo").unwrap();
         let woog_struct = lu_dog.exhume_woog_struct(&woog_struct).unwrap();
         let ty = crate::lu_dog::ValueType::new_woog_struct(true, &woog_struct, &mut lu_dog);
-        let mut result = Struct::new("Foo", &ty);
+
+        let mut result = Struct::new("::Foo", &Arc::new(RwLock::new(s_read!(ty).clone())));
         result.define_field("x", Value::Integer(42));
         result.define_field("y", Value::Float(0.42));
         let result = Value::Struct(result);
 
-        assert_eq!(&*s_read!(run.unwrap()), &result,);
+        assert_eq!(&*ref_read!(run.unwrap()), &result,);
     }
 }
