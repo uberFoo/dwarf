@@ -15,7 +15,7 @@ use crate::{
         error::{DwarfError, Result},
         extruder::{
             debug, e_warn, expression::method_call::method_call_return_type, function,
-            inter_expression, link_argument, lookup_woog_struct_method_return_type,
+            inter_expression, link_argument, link_value, lookup_woog_struct_method_return_type,
             make_value_type, typecheck, update_span_value, Context, ExprSpan,
         },
         items::enuum::create_generic_enum,
@@ -277,7 +277,8 @@ pub fn inter(
             }
         };
 
-        let value = XValue::new_expression(block, &ty, &call_expr, lu_dog);
+        let value = XValue::new_expression(block, None, &ty, &call_expr, lu_dog);
+        link_value!(value, lu_dog);
         update_span_value(&span, &value, location!());
 
         Ok(((call_expr, span), ty))
@@ -343,7 +344,8 @@ pub fn inter(
             }
         };
 
-        let value = XValue::new_expression(block, &ty, &call_expr, lu_dog);
+        let value = XValue::new_expression(block, None, &ty, &call_expr, lu_dog);
+        link_value!(value, lu_dog);
         update_span_value(&span, &value, location!());
 
         Ok(((call_expr, span), ty))
@@ -453,7 +455,8 @@ pub fn inter(
                     lu_dog,
                 )?;
 
-                let value = XValue::new_expression(block, &ret_ty, &expr, lu_dog);
+                let value = XValue::new_expression(block, None, &ret_ty, &expr, lu_dog);
+                link_value!(value, lu_dog);
                 Span::new(
                     s_read!(span).end,
                     s_read!(span).start,
@@ -591,7 +594,8 @@ fn inter_field(
             if let ParserExpression::LocalVariable(name) = &param.0 {
                 let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
                 let var = Variable::new_local_variable(name.to_owned(), &local, lu_dog);
-                let value = XValue::new_variable(block, &ty, &var, lu_dog);
+                let value = XValue::new_variable(block, None, &ty, &var, lu_dog);
+                link_value!(value, lu_dog);
                 Span::new(
                     param.1.end as i64,
                     param.1.start as i64,
@@ -693,7 +697,8 @@ fn inter_field(
         FieldExpression::new_unnamed_field_expression(&expr.0, &struct_expr, &nfe, lu_dog);
 
     let expr = Expression::new_field_expression(true, &strawberry, lu_dog);
-    let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+    let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+    link_value!(value, lu_dog);
     Span::new(
         s_read!(span).end,
         s_read!(span).start,
@@ -705,7 +710,8 @@ fn inter_field(
     // update_span_value(&span, &value, location!());
 
     let expr = Expression::new_struct_expression(true, &struct_expr, lu_dog);
-    let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+    let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+    link_value!(value, lu_dog);
     update_span_value(span, &value, location!());
 
     Ok(((expr, span.clone()), ty))

@@ -96,8 +96,23 @@ macro_rules! link_argument {
         Some(next.id)
     }};
 }
-
 pub(crate) use link_argument;
+
+macro_rules! link_value {
+    ($next:expr, $store:expr) => {{
+        let next_id = s_read!($next).id;
+        for value in $store.iter_x_value() {
+            if value != $next {
+                let mut value = s_write!(value);
+                if value.next == None {
+                    value.next = Some(next_id);
+                    break;
+                }
+            }
+        }
+    }};
+}
+pub(crate) use link_value;
 
 macro_rules! link_pattern {
     ($last:expr, $next:expr, $store:expr) => {{
@@ -986,7 +1001,6 @@ pub fn inter_statement(
                     local,
                 )
             };
-
             debug!("inter let {var:?}");
 
             // Now parse the RHS, which is an expression.
@@ -1025,7 +1039,8 @@ pub fn inter_statement(
             }
 
             // Create a variable, now that we have a type from the expression.
-            let value = XValue::new_variable(block, &ty, &var, lu_dog);
+            let value = XValue::new_variable(block, None, &ty, &var, lu_dog);
+            link_value!(value, lu_dog);
             LuDogSpan::new(
                 var_span.end as i64,
                 var_span.start as i64,
@@ -1159,7 +1174,9 @@ pub(super) fn inter_expression(
 
                 let element = ListElement::new(0, &first, None, lu_dog);
                 let expr = Expression::new_list_element(true, &element, lu_dog);
-                let value = XValue::new_expression(block, &first_ty, &expr, lu_dog);
+                let value = XValue::new_expression(block, None, &first_ty, &expr, lu_dog);
+                link_value!(value, lu_dog);
+
                 // We need to clone the span because it's already been used
                 // by the underlying value.
                 LuDogSpan::new(
@@ -1191,7 +1208,8 @@ pub(super) fn inter_expression(
 
                     last_element_uuid = link_list_element!(last_element_uuid, element, lu_dog);
                     let expr = Expression::new_list_element(true, &element, lu_dog);
-                    let value = XValue::new_expression(block, &elt_ty, &expr, lu_dog);
+                    let value = XValue::new_expression(block, None, &elt_ty, &expr, lu_dog);
+                    link_value!(value, lu_dog);
                     LuDogSpan::new(
                         s_read!(elt_span).end,
                         s_read!(elt_span).start,
@@ -1204,7 +1222,8 @@ pub(super) fn inter_expression(
 
                 let expr = Expression::new_list_expression(true, &list_expr, lu_dog);
                 let ty = ValueType::new_any_list(true, lu_dog);
-                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+                link_value!(value, lu_dog);
                 update_span_value(&span, &value, location!());
 
                 Ok(((expr, span), ty))
@@ -1275,7 +1294,8 @@ pub(super) fn inter_expression(
             let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(true, &expr, lu_dog);
 
-            let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &lhs_ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), lhs_ty))
@@ -1311,7 +1331,8 @@ pub(super) fn inter_expression(
                 let ty = s_read!(future).r2_value_type(lu_dog)[0].clone();
                 let expr = AWait::new(&expr.0, lu_dog);
                 let expr = Expression::new_a_wait(true, &expr, lu_dog);
-                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+                link_value!(value, lu_dog);
                 update_span_value(&span, &value, location!());
 
                 Ok(((expr, span), ty))
@@ -1333,7 +1354,8 @@ pub(super) fn inter_expression(
             let not = Unary::new_not(true, lu_dog);
             let operator = Operator::new_unary(&expr.0, None, &not, lu_dog);
             let expr = Expression::new_operator(true, &operator, lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), ty))
@@ -1352,7 +1374,8 @@ pub(super) fn inter_expression(
                 let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
                 let var = Variable::new_local_variable(var, &local, lu_dog);
                 debug!("variable {var:?}");
-                let _value = XValue::new_variable(&block, &ty.0, &var, lu_dog);
+                let value = XValue::new_variable(&block, None, &ty.0, &var, lu_dog);
+                link_value!(value, lu_dog);
                 // 🚧 We should really be passing a span in the Block so that
                 // we can link this XValue to it.
             }
@@ -1379,7 +1402,8 @@ pub(super) fn inter_expression(
                 import_stack,
                 lu_dog,
             )?;
-            let value = XValue::new_expression(&block, &ty.0, &expr, lu_dog);
+            let value = XValue::new_expression(&block,  None, &ty.0, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             // If it's an async block then wrap it in a future.
@@ -1410,7 +1434,8 @@ pub(super) fn inter_expression(
                 lu_dog,
             );
             let ty = ValueType::new_ty(true, &Ty::new_boolean(context.sarzak), lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), ty))
@@ -1426,7 +1451,8 @@ pub(super) fn inter_expression(
                 lu_dog,
             );
             let ty = ValueType::new_char(true, lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), ty))
@@ -1437,7 +1463,8 @@ pub(super) fn inter_expression(
         ParserExpression::Debug => {
             let expr = Expression::new_x_debugger(true, lu_dog);
             let ty = ValueType::new_empty(true, lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), ty))
@@ -1482,7 +1509,8 @@ pub(super) fn inter_expression(
             let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(true, &expr, lu_dog);
 
-            let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &lhs_ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), lhs_ty))
@@ -1493,7 +1521,8 @@ pub(super) fn inter_expression(
         ParserExpression::Empty => {
             let expr = Expression::new_empty_expression(true, lu_dog);
             let ty = ValueType::new_empty(true, lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), ty))
@@ -1537,7 +1566,8 @@ pub(super) fn inter_expression(
             let ty = Ty::new_boolean(context.sarzak);
             let ty = ValueType::new_ty(true, &ty, lu_dog);
 
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), ty))
@@ -1591,7 +1621,8 @@ pub(super) fn inter_expression(
                             let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
                             let expr = Expression::new_field_access(true, &expr, lu_dog);
                             let ty = s_read!(field).r5_value_type(lu_dog)[0].clone();
-                            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                            let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+                            link_value!(value, lu_dog);
                             update_span_value(&span, &value, location!());
 
                             Ok(((expr, span), ty))
@@ -1600,7 +1631,8 @@ pub(super) fn inter_expression(
                             let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
                             let expr = Expression::new_field_access(true, &expr, lu_dog);
                             let ty = s_read!(func).r10_value_type(lu_dog)[0].clone();
-                            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                            let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+                            link_value!(value, lu_dog);
                             update_span_value(&span, &value, location!());
 
                             Ok(((expr, span), ty))
@@ -1658,7 +1690,8 @@ pub(super) fn inter_expression(
                                     let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
                                     let expr = Expression::new_field_access(true, &expr, lu_dog);
                                     let ty = s_read!(field).r5_value_type(lu_dog)[0].clone();
-                                    let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                                    let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+                                    link_value!(value, lu_dog);
                                     update_span_value(&span, &value, location!());
 
                                     Ok(((expr, span), ty))
@@ -1667,7 +1700,8 @@ pub(super) fn inter_expression(
                                     let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
                                     let expr = Expression::new_field_access(true, &expr, lu_dog);
                                     let ty = s_read!(func).r10_value_type(lu_dog)[0].clone();
-                                    let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                                    let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+                                    link_value!(value, lu_dog);
                                     update_span_value(&span, &value, location!());
 
                                     Ok(((expr, span), ty))
@@ -1727,7 +1761,8 @@ pub(super) fn inter_expression(
                             let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
                             let expr = Expression::new_field_access(true, &expr, lu_dog);
                             let ty = s_read!(field).r5_value_type(lu_dog)[0].clone();
-                            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                            let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+                            link_value!(value, lu_dog);
                             update_span_value(&span, &value, location!());
 
                             Ok(((expr, span), ty))
@@ -1736,7 +1771,8 @@ pub(super) fn inter_expression(
                             let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
                             let expr = Expression::new_field_access(true, &expr, lu_dog);
                             let ty = s_read!(func).r10_value_type(lu_dog)[0].clone();
-                            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                            let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+                            link_value!(value, lu_dog);
                             update_span_value(&span, &value, location!());
 
                             Ok(((expr, span), ty))
@@ -1781,7 +1817,8 @@ pub(super) fn inter_expression(
                 lu_dog,
             );
             let ty = ValueType::new_ty(true, &Ty::new_float(context.sarzak), lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), ty))
@@ -1867,7 +1904,8 @@ pub(super) fn inter_expression(
             let expr = Expression::new_for_loop(true, &for_loop, lu_dog);
             let ty = ValueType::new_empty(true, lu_dog);
 
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), ty))
@@ -1880,7 +1918,8 @@ pub(super) fn inter_expression(
             let literal = Literal::new_format_string(true, &format_string, lu_dog);
             let expr = Expression::new_literal(true, &literal, lu_dog);
             let ty = ValueType::new_ty(true, &Ty::new_z_string(context.sarzak), lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             let mut last_format_bit_uuid: Option<SarzakStorePtr> = None;
@@ -1943,7 +1982,8 @@ pub(super) fn inter_expression(
             let func_call =
                 Call::new_function_call(true, None, Some(&func_expr.0), &func_call, lu_dog);
             let func = Expression::new_call(true, &func_call, lu_dog);
-            let value = XValue::new_expression(block, &ret_ty, &func, lu_dog);
+            let value = XValue::new_expression(block, None, &ret_ty, &func, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             let mut last_arg_uuid: Option<SarzakStorePtr> = None;
@@ -2030,7 +2070,8 @@ pub(super) fn inter_expression(
             let ty = Ty::new_boolean(context.sarzak);
             let ty = ValueType::new_ty(true, &ty, lu_dog);
 
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), ty))
@@ -2080,7 +2121,8 @@ pub(super) fn inter_expression(
             let ty = Ty::new_boolean(context.sarzak);
             let ty = ValueType::new_ty(true, &ty, lu_dog);
 
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), ty))
@@ -2114,7 +2156,8 @@ pub(super) fn inter_expression(
             let ty = ValueType::new_empty(true, lu_dog);
             let halt = HaltAndCatchFire::new(&expr.0, lu_dog);
             let expr = Expression::new_halt_and_catch_fire(true, &halt, lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), ty))
@@ -2194,7 +2237,8 @@ pub(super) fn inter_expression(
 
             let ty = true_ty;
 
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), ty))
@@ -2266,7 +2310,8 @@ pub(super) fn inter_expression(
 
             let index = Index::new(&index.0, &target.0, lu_dog);
             let expr = Expression::new_index(true, &index, lu_dog);
-            let value = XValue::new_expression(block, &target_ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &target_ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), target_ty))
@@ -2281,7 +2326,8 @@ pub(super) fn inter_expression(
                 lu_dog,
             );
             let ty = ValueType::new_ty(true, &Ty::new_integer(context.sarzak), lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), ty))
@@ -2361,7 +2407,8 @@ pub(super) fn inter_expression(
                 // We need to introduce the values into the block, so that we don't
                 // error out when parsing the statements.
                 //
-                let value = XValue::new_variable(&block, &param_ty, &var, lu_dog);
+                let value = XValue::new_variable(&block, None, &param_ty, &var, lu_dog);
+                link_value!(value, lu_dog);
                 LuDogSpan::new(
                     name_span.end as i64,
                     name_span.start as i64,
@@ -2390,7 +2437,8 @@ pub(super) fn inter_expression(
             )?;
 
             let expr = Expression::new_lambda(true, &lambda, lu_dog);
-            let value = XValue::new_expression(&block, &ret_ty, &expr, lu_dog);
+            let value = XValue::new_expression(&block, None, &ret_ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), ret_ty))
@@ -2440,7 +2488,8 @@ pub(super) fn inter_expression(
             let ty = Ty::new_boolean(context.sarzak);
             let ty = ValueType::new_ty(true, &ty, lu_dog);
 
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), ty))
@@ -2490,7 +2539,8 @@ pub(super) fn inter_expression(
             let ty = Ty::new_boolean(context.sarzak);
             let ty = ValueType::new_ty(true, &ty, lu_dog);
 
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), ty))
@@ -2511,7 +2561,8 @@ pub(super) fn inter_expression(
                     lu_dog,
                 );
                 let ty = ValueType::new_list(true, &list, lu_dog);
-                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+                link_value!(value, lu_dog);
                 update_span_value(&span, &value, location!());
 
                 Ok(((expr, span), ty))
@@ -2533,7 +2584,8 @@ pub(super) fn inter_expression(
                 let list = List::new(&first_ty, lu_dog);
                 let element = ListElement::new(0, &first, None, lu_dog);
                 let expr = Expression::new_list_element(true, &element, lu_dog);
-                let value = XValue::new_expression(block, &first_ty, &expr, lu_dog);
+                let value = XValue::new_expression(block, None, &first_ty, &expr, lu_dog);
+                link_value!(value, lu_dog);
                 // We need to clone the span because it's already been used
                 // by the underlying value.
                 LuDogSpan::new(
@@ -2572,7 +2624,8 @@ pub(super) fn inter_expression(
 
                     last_element_uuid = link_list_element!(last_element_uuid, element, lu_dog);
                     let expr = Expression::new_list_element(true, &element, lu_dog);
-                    let value = XValue::new_expression(block, &elt_ty, &expr, lu_dog);
+                    let value = XValue::new_expression(block, None, &elt_ty, &expr, lu_dog);
+                    link_value!(value, lu_dog);
                     LuDogSpan::new(
                         s_read!(elt_span).end,
                         s_read!(elt_span).start,
@@ -2585,7 +2638,8 @@ pub(super) fn inter_expression(
 
                 let expr = Expression::new_list_expression(true, &list_expr, lu_dog);
                 let ty = ValueType::new_list(true, &list, lu_dog);
-                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+                link_value!(value, lu_dog);
                 update_span_value(&span, &value, location!());
 
                 Ok(((expr, span), ty))
@@ -2617,15 +2671,12 @@ pub(super) fn inter_expression(
                 parent = s_read!(block).r93_block(lu_dog).pop();
             }
 
-            dbg!(&values);
-
             // Now search for a value that's a Variable, and see if the access matches
             // the variable.
             let mut expr_type_tuples = values
                 .iter()
                 .filter_map(|value| {
-                    let value = &*s_read!(value);
-                    match value.subtype {
+                    match s_read!(value).subtype {
                         XValueEnum::Expression(ref _expr) => {
                             // What's going on is that there are a bunch of values in the block.
                             // We are iterating over them all, and we are bound to find some that
@@ -2636,7 +2687,6 @@ pub(super) fn inter_expression(
                             None
                         }
                         XValueEnum::Variable(ref var) => {
-                            dbg!(&var);
                             let var = s_read!(lu_dog.exhume_variable(var).unwrap()).clone();
                             debug!("value var {:?}", var);
                             // Check the name
@@ -2645,31 +2695,50 @@ pub(super) fn inter_expression(
                                     VariableEnum::LocalVariable(_) |
                                     VariableEnum::Parameter(_) |
                                     VariableEnum::LambdaParameter(_)=> {
-                                        let ty = value.r24_value_type(lu_dog)[0].clone();
+                                        let mut next = s_read!(value).next;
+                                        while let Some(ref n) = next {
+                                            let n = lu_dog.exhume_x_value(n).unwrap();
+                                            match s_read!(n).subtype {
+                                                XValueEnum::Variable(ref var) => {
+                                                    let var = s_read!(lu_dog.exhume_variable(var).unwrap()).clone();
+                                                    if var.name == *name {
+                                                        // If there is another variable further down the
+                                                        // chain with the same name then we get out.
+                                                        break;
+                                                    }
+                                                }
+                                                _ => {}
+                                            }
+                                            next = s_read!(n).next;
+                                        }
 
-                                        let ty_str =
-                                            PrintableValueType(true, &ty, context, lu_dog);
-                                        debug!("LocalVariable: {name}, {}, {value:?} ({ty:?})", ty_str.to_string());
-
-                                        let expr = lu_dog
-                                            .iter_variable_expression()
-                                            .find(|expr| s_read!(expr).name == *name);
-
-                                        let expr = if let Some(expr) = expr {
-                                            s_read!(expr).r15_expression(lu_dog)[0].clone()
+                                        // If there is another variable further down the chain with the same name
+                                        // then we get out.
+                                        if next.is_some() {
+                                            None
                                         } else {
-                                            let expr =
-                                                VariableExpression::new(name.to_owned(), lu_dog);
-                                            debug!("created a new variable expression {:?}", expr);
-                                             Expression::new_variable_expression(true, &expr, lu_dog)
-                                        };
+                                            let ty = s_read!(value).r24_value_type(lu_dog)[0].clone();
 
-                                        let value =
-                                            XValue::new_expression(block, &ty, &expr, lu_dog);
-                                        update_span_value(&span, &value, location!());
+                                            let ty_str =
+                                                PrintableValueType(true, &ty, context, lu_dog);
+                                            debug!("LocalVariable: {name}, {}, {value:?} ({ty:?})", ty_str.to_string());
 
-                                        debug!("LocalVariable ({expr:#?}, {ty:#?})");
-                                        Some(((expr, span.clone()), ty))
+                                            let expr = lu_dog
+                                                .iter_variable_expression()
+                                                .find(|expr| s_read!(expr).name == *name);
+
+                                            let expr = if let Some(expr) = expr {
+                                                s_read!(expr).r15_expression(lu_dog)[0].clone()
+                                            } else {
+                                                let expr =
+                                                    VariableExpression::new(name.to_owned(), lu_dog);
+                                                debug!("created a new variable expression {:?}", expr);
+                                                 Expression::new_variable_expression(true, &expr, lu_dog)
+                                            };
+
+                                            debug!("LocalVariable ({expr:#?}, {ty:#?})");
+                                            Some(((expr, span.clone()), ty))
+                                        }
                                     }
                                 }
                             } else {
@@ -2682,6 +2751,13 @@ pub(super) fn inter_expression(
                     (RefType<Expression>, RefType<LuDogSpan>),
                     RefType<ValueType>,
                 )>>();
+
+            for ((expr, _), ty) in &expr_type_tuples {
+                let value =
+                    XValue::new_expression(block, None, ty, expr, lu_dog);
+                    link_value!(value, lu_dog);
+                update_span_value(&span, &value, location!());
+            }
             // There should be zero or 1 results.
             // Actually there are `n`, where `n` is the number of values in the block,
             // which is equivalent to the number of `let` statements.
@@ -2717,8 +2793,6 @@ pub(super) fn inter_expression(
             //
             // debug_assert!(expr_type_tuples.len() <= 1);
 
-            dbg!(&expr_type_tuples);
-
             // Why are we taking the last one? -- Oh, read above.
             // I guess we want the first one. Sigh. The comments need to be updated
             // into something narrative, and useful.
@@ -2744,7 +2818,8 @@ pub(super) fn inter_expression(
                 let expr = VariableExpression::new(name.to_owned(), lu_dog);
                 let expr = Expression::new_variable_expression(true, &expr, lu_dog);
 
-                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+                link_value!(value, lu_dog);
                 update_span_value(&span, &value, location!());
 
                 debug!("LocalVariable function ({expr:#?}, {ty:#?})");
@@ -2756,7 +2831,8 @@ pub(super) fn inter_expression(
                 let expr = VariableExpression::new(name.to_owned(), lu_dog);
                 let expr = Expression::new_variable_expression(true, &expr, lu_dog);
 
-                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+                link_value!(value, lu_dog);
                 update_span_value(&span, &value, location!());
 
                 debug!("LocalVariable function ({expr:#?}, {ty:#?})");
@@ -2790,7 +2866,8 @@ pub(super) fn inter_expression(
                     lu_dog,
                 );
                 let ty = ValueType::new_map(true, &map, lu_dog);
-                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+                link_value!(value, lu_dog);
                 update_span_value(&span, &value, location!());
 
                 Ok(((expr, span), ty))
@@ -2866,7 +2943,8 @@ pub(super) fn inter_expression(
                     lu_dog,
                 );
                 let ty = ValueType::new_map(true, &map, lu_dog);
-                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+                link_value!(value, lu_dog);
                 update_span_value(&span, &value, location!());
 
                 Ok(((expr, span), ty))
@@ -2991,7 +3069,8 @@ pub(super) fn inter_expression(
 
             let expr = Expression::new_x_match(true, &xmatch, lu_dog);
 
-            let value = XValue::new_expression(block, &match_ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &match_ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), match_ty))
@@ -3027,7 +3106,8 @@ pub(super) fn inter_expression(
             let negation = Unary::new_negation(true, lu_dog);
             let operator = Operator::new_unary(&expr.0, None, &negation, lu_dog);
             let expr = Expression::new_operator(true, &operator, lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), ty))
@@ -3068,7 +3148,8 @@ pub(super) fn inter_expression(
             let ty = Ty::new_boolean(context.sarzak);
             let ty = ValueType::new_ty(true, &ty, lu_dog);
 
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), ty))
@@ -3088,7 +3169,8 @@ pub(super) fn inter_expression(
             let ty = ValueType::new_empty(true, lu_dog);
             let print = XPrint::new(&expr.0, lu_dog);
             let expr = Expression::new_x_print(true, &print, lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), ty))
@@ -3133,7 +3215,8 @@ pub(super) fn inter_expression(
             let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(true, &expr, lu_dog);
 
-            let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &lhs_ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), lhs_ty))
@@ -3188,7 +3271,8 @@ pub(super) fn inter_expression(
             let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(true, &expr, lu_dog);
 
-            let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &lhs_ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), lhs_ty))
@@ -3219,7 +3303,8 @@ pub(super) fn inter_expression(
                 let ty =
                     make_value_type(&generic[0].0, ut_span, None, context, import_stack, lu_dog)?;
 
-                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+                link_value!(value, lu_dog);
                 update_span_value(&span, &value, location!());
 
                 debug!("expr {expr:?}, value {value:?}, type {ty:?}, span {span:?}");
@@ -3262,7 +3347,8 @@ pub(super) fn inter_expression(
             let range = RangeExpression::new_full(Some(&start.0), Some(&end.0), lu_dog);
 
             let expr = Expression::new_range_expression(true, &range, lu_dog);
-            let value = XValue::new_expression(block, &start_ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &start_ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), ValueType::new_range(true, lu_dog)))
@@ -3288,7 +3374,8 @@ pub(super) fn inter_expression(
                     lu_dog,
                 );
                 let ty = ValueType::new_empty(true, lu_dog);
-                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+                link_value!(value, lu_dog);
                 cfg_if::cfg_if! {
                     if #[cfg(not(feature="debug"))] {
                         // See # Span Bug
@@ -3320,7 +3407,8 @@ pub(super) fn inter_expression(
 
             let ret = XReturn::new(&expr.0, lu_dog);
             let expr = Expression::new_x_return(true, &ret, lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), ty))
@@ -3355,7 +3443,8 @@ pub(super) fn inter_expression(
                 lu_dog,
             );
             let ty = ValueType::new_ty(true, &Ty::new_z_string(context.sarzak), lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), ty))
@@ -3399,7 +3488,8 @@ pub(super) fn inter_expression(
             let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(true, &expr, lu_dog);
 
-            let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, None, &lhs_ty, &expr, lu_dog);
+            link_value!(value, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), lhs_ty))

@@ -8,7 +8,7 @@ use crate::{
     dwarf::{
         error::{DwarfError, Result},
         extruder::{
-            debug, function, inter_statements, make_value_type, typecheck, Context,
+            debug, function, inter_statements, link_value, make_value_type, typecheck, Context,
             FunctionDefinition, Span, EXTRACT_GENERICS, EXTRACT_GENERICS_RE, FUNC, OBJECT, PROXY,
             STORE,
         },
@@ -222,7 +222,8 @@ pub fn inter_func(
             for (var, ty) in vars.iter().zip(tys.iter()) {
                 let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
                 let var = Variable::new_local_variable(var.to_owned(), &local, lu_dog);
-                let _value = XValue::new_variable(&block, &ty.0, &var, lu_dog);
+                let value = XValue::new_variable(&block, None, &ty.0, &var, lu_dog);
+                link_value!(value, lu_dog);
                 // 🚧 We should really be passing a span in the Block so that
                 // we can link this XValue to it.
             }
@@ -345,7 +346,8 @@ pub fn inter_func(
         debug!("var {:?}", var);
 
         if let Some((ref block, _, _)) = block {
-            let value = XValue::new_variable(block, &param_ty, &var, lu_dog);
+            let value = XValue::new_variable(block, None, &param_ty, &var, lu_dog);
+            link_value!(value, lu_dog);
             LuDogSpan::new(
                 name_span.end as i64,
                 name_span.start as i64,
