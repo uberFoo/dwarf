@@ -1,6 +1,6 @@
 use std::sync::{Arc, RwLock};
 
-use snafu::{location, Location};
+use snafu::location;
 
 use crate::{
     bubba::{

@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use log::debug;
-use snafu::{location, Location};
+use snafu::location;
 
 use crate::{
     dwarf::{

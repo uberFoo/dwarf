@@ -10,7 +10,7 @@ use ansi_term::Colour;
 #[cfg(feature = "async")]
 use puteketeke::AsyncTask;
 use serde::{Deserialize, Serialize};
-use snafu::{location, Backtrace, Location};
+use snafu::{location, Backtrace};
 
 // #[cfg(feature = "async")]
 // use smol::future;

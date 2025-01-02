@@ -55,7 +55,6 @@ pub fn inter_struct(
             location: location!(),
         }]);
     }
-    context.types.insert(name.to_owned());
 
     let name = context.path.clone() + name;
 

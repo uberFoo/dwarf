@@ -11,9 +11,9 @@ async-std = { version = "1.12.0", features = ["attributes"] }
 chrono = "0.4.38"
 crossbeam = { version = "0.8.4", features = ["crossbeam-channel"] }
 dwarf = { path = "../../" }
-futures-lite = "2.2.0"
+futures-lite = "2.5.0"
 slab = "0.4.9"
-sqlx = { version = "0.7", features = [
+sqlx = { version = "0.8.2", features = [
     "runtime-async-std-rustls",
     "postgres",
     "chrono",

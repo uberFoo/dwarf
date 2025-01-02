@@ -10,7 +10,7 @@ use abi_stable::{
 };
 use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
-use snafu::{location, Backtrace, Location};
+use snafu::{location, Backtrace};
 use uuid::Uuid;
 
 use crate::{
@@ -414,7 +414,7 @@ impl From<(FfiValue, &Value)> for Value {
                 };
 
                 Value::Enumeration(Enum::Tuple(
-                    (new_ref!(ValueType, ty.to_owned()), "Result".to_owned()),
+                    (new_ref!(ValueType, ty.to_owned()), RESULT_TYPE.to_owned()),
                     new_ref!(TupleEnum<Value>, tuple),
                 ))
             }

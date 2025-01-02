@@ -7,7 +7,7 @@ edition = "2021"
 abi_stable = "0.11.3"
 dwarf = { path = "../../" }
 html-escape = "0.2.13"
-markdown = "1.0.0-alpha.16"
+markdown = "0.3.0"
 regex = "1.10.4"
 tracing = "0.1.40"
 

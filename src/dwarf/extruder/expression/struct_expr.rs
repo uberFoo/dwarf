@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use log::debug;
 use rustc_hash::FxHashMap as HashMap;
-use snafu::{location, Location};
+use snafu::location;
 use uuid::Uuid;
 
 use crate::{

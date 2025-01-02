@@ -1,6 +1,6 @@
 use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
-use snafu::{location, Location};
+use snafu::location;
 use uuid::Uuid;
 
 use crate::{
@@ -53,7 +53,6 @@ pub fn inter_enum(
             location: location!(),
         }]);
     }
-    context.types.insert(name.0.clone());
 
     let name = context.path.clone() + &name.0;
     debug!("inter_enum {name}");

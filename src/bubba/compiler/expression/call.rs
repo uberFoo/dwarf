@@ -1,4 +1,4 @@
-use snafu::{location, Location};
+use snafu::location;
 use uuid::Uuid;
 
 #[cfg(feature = "async")]
@@ -381,6 +381,7 @@ fn compile_method_call(
                             }
                             meth => {
                                 dbg!(&ty, &meth, &args);
+                                panic!();
                             }
                         },
                         _ => {}

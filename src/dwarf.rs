@@ -12,7 +12,7 @@ use clap::Args;
 use rustc_hash::FxHashMap as HashMap;
 use sarzak::sarzak::types::Ty;
 use serde::{Deserialize, Serialize};
-use snafu::{location, Location};
+use snafu::location;
 use uuid::Uuid;
 
 use crate::{

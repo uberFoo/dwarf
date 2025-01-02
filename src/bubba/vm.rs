@@ -22,7 +22,7 @@ use ansi_term::Colour;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use once_cell::sync::OnceCell;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use snafu::{location, Location};
+use snafu::location;
 use threadpool::ThreadPool;
 
 use crate::{

@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use ansi_term::Colour;
-use snafu::{location, Location};
+use snafu::location;
 use uuid::Uuid;
 
 #[cfg(feature = "async")]

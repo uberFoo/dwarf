@@ -1,4 +1,4 @@
-use snafu::{location, Location};
+use snafu::location;
 use uuid::Uuid;
 
 use crate::{

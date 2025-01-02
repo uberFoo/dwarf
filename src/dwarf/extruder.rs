@@ -388,12 +388,6 @@ pub struct Context<'a> {
     /// This is a HashSet of module paths that have been imported.
     pub imports: &'a mut HashSet<PathBuf>,
     pub generics: Vec<(Type, Span)>,
-    /// Types
-    ///
-    /// This is a HashSet of types that have been imported.
-    /// This can probably be removed and replaced with a check against the
-    /// scopes HashMap.
-    pub types: &'a mut HashSet<String>,
     /// Silent
     ///
     /// If true, then we don't print anything.
@@ -415,7 +409,6 @@ impl<'a> Context<'a> {
         path: String,
         scopes: &'a mut HashMap<String, String>,
         imports: &'a mut HashSet<PathBuf>,
-        types: &'a mut HashSet<String>,
         silent: bool,
     ) -> Self {
         Self {
@@ -435,7 +428,6 @@ impl<'a> Context<'a> {
             scopes,
             imports,
             generics: Vec::new(),
-            types,
             silent,
         }
     }
@@ -492,7 +484,6 @@ pub fn new_lu_dog(
     let mut dirty = Vec::new();
     let mut stack = Vec::new();
     let mut imports = HashSet::default();
-    let mut types = HashSet::default();
 
     if let Some((source, ast)) = source {
         let mut context = Context {
@@ -512,7 +503,6 @@ pub fn new_lu_dog(
             scopes: &mut scopes,
             imports: &mut imports,
             generics: Vec::new(),
-            types: &mut types,
             silent,
         };
 
@@ -2689,6 +2679,7 @@ pub(super) fn inter_expression(
                         XValueEnum::Variable(ref var) => {
                             let var = s_read!(lu_dog.exhume_variable(var).unwrap()).clone();
                             debug!("value var {:?}", var);
+                            // dbg!(&var.name);
                             // Check the name
                             if var.name == *name  {
                                 match var.subtype {
@@ -3682,12 +3673,6 @@ fn inter_module(
         }
     }
 
-    if !context.imports.insert(path.clone()) {
-        debug!("{name} already imported");
-        panic!("this is dead code");
-        return Ok(());
-    }
-
     if !context.silent {
         println!("\n{} {}", Colour::Green.paint("Extruding:"), path.display());
     }
@@ -3709,7 +3694,6 @@ fn inter_module(
                     let mut dirty = Vec::new();
                     // We want fresh scopes and types importing a module.
                     let mut scopes = HashMap::default();
-                    let mut types = HashSet::default();
                     let mut new_lu_dog = LuDogStore::new();
 
                     let mut new_ctx = Context::new(
@@ -3725,7 +3709,6 @@ fn inter_module(
                         type_path,
                         &mut scopes,
                         context.imports,
-                        &mut types,
                         context.silent,
                     );
 
@@ -3903,15 +3886,18 @@ fn inter_import(
     // that when we are interring a module we can import only the
     // thing on the top of the stack.
     let fq_type = type_root.clone() + &ty;
-
     // This is testing if it's been imported yet, either via a compiled file,
     // or extruding the module.
-    if let Some(_) = context.types.get(&fq_type) {
+
+    if lu_dog.exhume_woog_struct_id_by_name(&fq_type).is_some()
+        || lu_dog.exhume_enumeration_id_by_name(&fq_type).is_some()
+    {
         debug!("{fq_type} already imported");
+        // This needs to be added to the scopes even though it's in the store.
+        context.scopes.insert(ty.clone(), type_root.clone());
         return Ok(());
     } else {
         debug!("{fq_type} being imported");
-        context.types.insert(fq_type.clone());
     }
 
     if !context.silent {
@@ -4007,7 +3993,7 @@ fn inter_import(
                                     // Update the scopes
                                     context.scopes.insert(ty.clone(), type_root.clone());
 
-                                    // Update the dirty stuff, even though it doesn't seem to be used.
+                                    // Update the dirty stuff, is this used? For what?
                                     if let Some(dirty_file) = fs::File::open(&dirty_path)
                                         .map_err(|e| {
                                             errors.push(DwarfError::File {
@@ -4074,7 +4060,6 @@ fn inter_import(
                         format!("::{module}::"),
                         context.scopes,
                         context.imports,
-                        context.types,
                         context.silent,
                     );
 
@@ -4114,6 +4099,21 @@ fn inter_import(
                             });
                         });
                     }
+
+                    // for woog in new_lu_dog.iter_woog_struct() {
+                    //     let woog = s_read!(woog);
+                    //     let name = woog.name.clone().split(PATH_SEP).last().unwrap().to_owned();
+                    //     let path = woog.x_path.clone();
+                    //     dbg!(&name, &path);
+                    //     context.scopes.insert(name, path);
+                    // }
+                    // for woog in new_lu_dog.iter_enumeration() {
+                    //     let woog = s_read!(woog);
+                    //     let name = woog.name.clone().split(PATH_SEP).last().unwrap().to_owned();
+                    //     let path = woog.x_path.clone();
+                    //     dbg!(&name, &path);
+                    //     context.scopes.insert(name, path);
+                    // }
 
                     lu_dog.merge(&new_lu_dog);
 
@@ -4627,19 +4627,19 @@ pub(crate) fn make_value_type(
                 // This feels sort of dirty. Sometimes the name has leading `::`, and
                 // sometimes it does not. We don't want it here because below we
                 // concatenate the name and the path and the path has a trailing `::`.
-                let fq_name = if let Some(name) = tok.0.split(PATH_SEP).last() {
+                let name = if let Some(name) = tok.0.split(PATH_SEP).last() {
                     name.to_owned()
                 } else {
                     tok.0.clone()
                 };
 
-                let fq_name = if let Some(path) = context.scopes.get(&fq_name) {
-                    path.to_owned() + fq_name.as_str()
+                let fq_name = if let Some(path) = context.scopes.get(&name) {
+                    path.to_owned() + name.as_str()
                 } else {
-                    context.path.clone() + fq_name.as_str()
+                    context.path.clone() + name.as_str()
                 };
 
-                let name = fq_name.clone();
+                // let name = fq_name.clone();
 
                 // kts
                 // if !generics.is_empty() {
@@ -4655,49 +4655,47 @@ pub(crate) fn make_value_type(
                 // }
 
                 if let Some(ty) = lookup_user_defined_type(lu_dog, &fq_name, span, context) {
-                    // 🔥 I think that I need to look at the returned type and see if it has
-                    // generics, and then match them up with the generics I have above. But
-                    // then what happens? I can't really return a new type with the substitutions
-                    // I don't think.
                     Ok(ty)
-                } else if fq_name != name {
-                    // 🚧  I don't trust this code -- it needs testing.
-                    if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(&name) {
-                        let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
-                        let struct_fields = s_read!(woog_struct).r7_field(lu_dog);
-                        let mut generic_substitutions = HashMap::default();
+                } else if let Some(ty) = lookup_user_defined_type(lu_dog, &name, span, context) {
+                    Ok(ty)
+                // } else if fq_name != name {
+                //     // 🚧  I don't trust this code -- it needs testing.
+                //     if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(&name) {
+                //         let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
+                //         let struct_fields = s_read!(woog_struct).r7_field(lu_dog);
+                //         let mut generic_substitutions = HashMap::default();
 
-                        for field in struct_fields {
-                            let field = s_read!(field);
-                            let field_ty = lu_dog.exhume_value_type(&field.ty).unwrap();
-                            let field_ty = s_read!(field_ty);
-                            if let ValueTypeEnum::StructGeneric(ref id) = field_ty.subtype {
-                                let generic = lu_dog.exhume_struct_generic(id).unwrap();
-                                let generic = s_read!(generic);
-                                let ty = generic.r1_value_type(lu_dog)[0].clone();
-                                generic_substitutions.insert(generic.name.to_owned(), ty);
-                            }
-                        }
+                //         for field in struct_fields {
+                //             let field = s_read!(field);
+                //             let field_ty = lu_dog.exhume_value_type(&field.ty).unwrap();
+                //             let field_ty = s_read!(field_ty);
+                //             if let ValueTypeEnum::StructGeneric(ref id) = field_ty.subtype {
+                //                 let generic = lu_dog.exhume_struct_generic(id).unwrap();
+                //                 let generic = s_read!(generic);
+                //                 let ty = generic.r1_value_type(lu_dog)[0].clone();
+                //                 generic_substitutions.insert(generic.name.to_owned(), ty);
+                //             }
+                //         }
 
-                        if let Some((_, ty)) = create_generic_struct(
-                            &woog_struct,
-                            &generic_substitutions,
-                            span,
-                            context,
-                            context.sarzak,
-                            lu_dog,
-                        ) {
-                            Ok(ty)
-                        } else if let Some(ty) =
-                            lookup_user_defined_type(lu_dog, &name, span, context)
-                        {
-                            Ok(ty)
-                        } else {
-                            panic!("this is a mess");
-                        }
-                    } else {
-                        Ok(create_generic_enum(&fq_name, &name, &span, context, lu_dog)?.1)
-                    }
+                //         if let Some((_, ty)) = create_generic_struct(
+                //             &woog_struct,
+                //             &generic_substitutions,
+                //             span,
+                //             context,
+                //             context.sarzak,
+                //             lu_dog,
+                //         ) {
+                //             Ok(ty)
+                //         } else if let Some(ty) =
+                //             lookup_user_defined_type(lu_dog, &name, span, context)
+                //         {
+                //             Ok(ty)
+                //         } else {
+                //             panic!("this is a mess");
+                //         }
+                // } else {
+                //         Ok(create_generic_enum(&fq_name, &name, &span, context, lu_dog)?.1)
+                // }
                 } else if let Some(ty) = lookup_user_defined_type(lu_dog, &name, span, context) {
                     Ok(ty)
                 } else if let Some(ref id) = lu_dog.exhume_z_object_store_id_by_name(&name) {
