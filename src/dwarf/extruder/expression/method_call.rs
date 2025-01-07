@@ -7,7 +7,7 @@ use crate::{
     dwarf::{
         error::{DwarfError, Result},
         extruder::{
-            debug, e_warn, function, inter_expression, link_argument, link_value,
+            debug, e_warn, function, inter_expression, link_argument,
             lookup_woog_enum_method_return_type, lookup_woog_struct_method_return_type,
             update_span_value, Context, ExprSpan,
         },
@@ -55,8 +55,7 @@ pub(in crate::dwarf::extruder) fn inter(
     let call = Call::new_method_call(true, None, Some(&instance.0), &meth, lu_dog);
     let expr = Expression::new_call(true, &call, lu_dog);
 
-    let value = XValue::new_expression(block, None, &instance_ty, &expr, lu_dog);
-    link_value!(value, lu_dog);
+    let value = XValue::new_expression(block, &instance_ty, &expr, lu_dog);
     update_span_value(&span, &value, location!());
 
     let mut last_arg_uuid: Option<SarzakStorePtr> = None;
@@ -80,8 +79,7 @@ pub(in crate::dwarf::extruder) fn inter(
             import_stack,
             lu_dog,
         )?;
-        let value = XValue::new_expression(block, None, &ty, &arg_expr.0, lu_dog);
-        link_value!(value, lu_dog);
+        let value = XValue::new_expression(block, &ty, &arg_expr.0, lu_dog);
         let _span = LuDogSpan::new(
             arg.1.end as i64,
             arg.1.start as i64,

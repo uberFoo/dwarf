@@ -16,7 +16,7 @@ use snafu::location;
 use uuid::Uuid;
 
 use crate::{
-    dwarf::{extruder::link_value, items::enuum::create_generic_enum},
+    dwarf::items::enuum::create_generic_enum,
     lu_dog::{
         store::ObjectStore as LuDogStore, types::ValueType, Block, DwarfSourceFile, Lambda, List,
         LocalVariable, Map, Span as LuDogSpan, Variable, XFuture, XValue,
@@ -454,8 +454,7 @@ impl<'a>
 
                     let local = LocalVariable::new(Uuid::new_v4(), &mut lu_dog);
                     let var = Variable::new_local_variable(name.clone(), &local, &mut lu_dog);
-                    let value = XValue::new_variable(&block, None, &ty, &var, &mut lu_dog);
-                    link_value!(value, lu_dog);
+                    let value = XValue::new_variable(&block, &ty, &var, &mut lu_dog);
                     LuDogSpan::new(
                         span.start as i64,
                         span.end as i64,

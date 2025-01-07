@@ -9,8 +9,8 @@ use crate::{
     dwarf::{
         error::{DwarfError, Result},
         extruder::{
-            create_generic_struct, inter_expression, link_value, typecheck, update_span_value,
-            Context, ExprSpan,
+            create_generic_struct, inter_expression, typecheck, update_span_value, Context,
+            ExprSpan,
         },
         Expression as ParserExpression, PrintableValueType, Type,
     },
@@ -218,8 +218,7 @@ pub fn inter(
             FieldExpression::new_named_field_expression(&field_expr.0, &struct_expr, &nfe, lu_dog);
 
         let expr = Expression::new_field_expression(true, &field, lu_dog);
-        let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
-        link_value!(value, lu_dog);
+        let value = XValue::new_expression(block, &ty, &expr, lu_dog);
         update_span_value(&span, &value, location!());
 
         // # Span Bug
@@ -288,8 +287,7 @@ pub fn inter(
     let expr = Expression::new_struct_expression(true, &struct_expr, lu_dog);
     let ty = ValueType::new_woog_struct(true, &woog_struct, lu_dog);
 
-    let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
-    link_value!(value, lu_dog);
+    let value = XValue::new_expression(block, &ty, &expr, lu_dog);
     update_span_value(&span, &value, location!());
 
     Ok(((expr, span), ty))

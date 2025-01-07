@@ -5,14 +5,14 @@ use snafu::location;
 use crate::{
     dwarf::{
         error::{DwarfError, Result},
-        extruder::{inter_expression, link_value, typecheck, update_span_value, Context, ExprSpan},
+        extruder::{inter_expression, typecheck, update_span_value, Context, ExprSpan},
         Expression as ParserExpression, PrintableValueType,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore, Binary, Block, BooleanOperator, Expression, Operator,
         Span, ValueType, ValueTypeEnum, XValue,
     },
-    new_ref, s_read, s_write,
+    new_ref, s_read,
     sarzak::Ty,
     NewRef, RefType,
 };
@@ -74,8 +74,7 @@ pub fn inter(
     let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
     let expr = Expression::new_operator(true, &expr, lu_dog);
 
-    let value = XValue::new_expression(block, None, &lhs_ty, &expr, lu_dog);
-    link_value!(value, lu_dog);
+    let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
     update_span_value(&span, &value, location!());
 
     Ok(((expr, span), lhs_ty))

@@ -7,9 +7,7 @@ use uuid::Uuid;
 use crate::{
     dwarf::{
         error::{DwarfError, Result},
-        extruder::{
-            create_generic_enum, debug, function, link_value, update_span_value, Context, ExprSpan,
-        },
+        extruder::{create_generic_enum, debug, function, update_span_value, Context, ExprSpan},
         Expression as ParserExpression, Type,
     },
     lu_dog::{
@@ -148,8 +146,7 @@ pub fn inter(
             let expr = Expression::new_struct_expression(true, &struct_expr, lu_dog);
             debug!("expression {expr:?}");
 
-            let value = XValue::new_expression(block, None, &ty, &expr, lu_dog);
-            link_value!(value, lu_dog);
+            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), ty))
