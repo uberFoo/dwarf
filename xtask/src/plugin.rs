@@ -103,13 +103,13 @@ fn build_plugin(
     let target_dir = if debug { "debug" } else { "release" };
 
     if env::consts::OS == "macos" {
-        println!("Copying lib{}.dylib", name);
+        println!("Copying lib{}.dylib to ${lib_dir}", name);
         sh.copy_file(format!("target/{target_dir}/lib{name}.dylib"), lib_dir)?;
     } else if env::consts::OS == "linux" {
-        println!("Copying lib{}.so", name);
+        println!("Copying lib{}.so to ${lib_dir}", name);
         sh.copy_file(format!("target/{target_dir}/lib{name}.so"), lib_dir)?;
     } else if env::consts::OS == "windows" {
-        println!("Copying {}.dll", name);
+        println!("Copying {}.dll to ${lib_dir}", name);
         sh.copy_file(format!("target/{target_dir}/{name}.dll"), lib_dir)?;
     } else {
         panic!("{} is not a supported platform", env::consts::OS);
@@ -121,7 +121,7 @@ fn build_plugin(
 
     for entry in fs::read_dir(&current_dir)? {
         let path = entry?.path();
-        println!("Copying {}", path.display());
+        println!("Copying {} to ${src_dir}", path.display());
         sh.copy_file(path, &src_dir)?;
     }
 
@@ -132,7 +132,7 @@ fn build_plugin(
     if current_dir.exists() {
         for entry in fs::read_dir(&current_dir)? {
             let path = entry?.path();
-            println!("Copying {}", path.display());
+            println!("Copying {} to ${misc_dir}", path.display());
             sh.copy_file(path, &misc_dir)?;
         }
     }
@@ -150,7 +150,7 @@ fn build_plugin(
             if metadata.is_dir() {
                 continue;
             }
-            println!("Copying {}", path.display());
+            println!("Copying {} to ${model_dir}", path.display());
             sh.copy_file(path, &model_dir)?;
         }
     }
