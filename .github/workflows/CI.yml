@@ -74,6 +74,7 @@ jobs:
                   cd dwarf
                   cargo xtask install
                   cargo xtask plugin
+                  ls -l ~/.dwarf/
 
             - name: Build and run tests with coverage
               run: |
