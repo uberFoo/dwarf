@@ -17,13 +17,7 @@ const TAO_DIR: &str = "ore";
 const MISC_DIR: &str = "misc";
 
 impl flags::Plugin {
-    pub(crate) fn run(self, sh: &Shell) -> anyhow::Result<()> {
-        let dwarf_home = env::var("DWARF_HOME").unwrap_or_else(|_| {
-            let mut home = env::var("HOME").unwrap();
-            home.push_str("/.dwarf");
-            home
-        });
-
+    pub(crate) fn run(self, sh: &Shell, dwarf_home: &String) -> anyhow::Result<()> {
         let mut current_dir = std::env::current_dir()?;
         current_dir.push(PLUGIN_DIR);
         sh.change_dir(PLUGIN_DIR);

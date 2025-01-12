@@ -5,13 +5,7 @@ use crate::flags;
 use xshell::{cmd, Shell};
 
 impl flags::Install {
-    pub(crate) fn run(self, sh: &Shell) -> anyhow::Result<()> {
-        let dwarf_home = env::var("DWARF_HOME").unwrap_or_else(|_| {
-            let mut home = env::var("HOME").unwrap();
-            home.push_str("/.dwarf");
-            home
-        });
-
+    pub(crate) fn run(self, sh: &Shell, dwarf_home: &String) -> anyhow::Result<()> {
         if self.debug.unwrap_or(false) {
             cmd!(sh, "cargo install --path . --force --locked --debug").run()?;
         } else {
@@ -41,6 +35,9 @@ impl flags::Install {
 
         let compiled = format!("{}/compiled", dwarf_home);
         fs::create_dir_all(&compiled)?;
+
+        let extruded = format!("{}/extruded", dwarf_home);
+        fs::create_dir_all(&extruded)?;
 
         Ok(())
     }
