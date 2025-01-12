@@ -71,7 +71,7 @@ jobs:
 
             - name: Install dwarf
               env:
-                  DWARF_HOME: ~/.dwarf
+                  DWARF_HOME: /home/runner/.dwarf
               run: |
                   cd dwarf
                   cargo xtask install
@@ -86,7 +86,7 @@ jobs:
             - name: Upload coverage reports to Codecov
               uses: codecov/codecov-action@v3
               env:
-                  DWARF_HOME: ~/.dwarf
+                  DWARF_HOME: /home/runner/.dwarf
                   CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
               with:
                   working-directory: .
