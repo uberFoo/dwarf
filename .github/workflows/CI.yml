@@ -70,6 +70,8 @@ jobs:
               uses: taiki-e/install-action@cargo-llvm-cov
 
             - name: Install dwarf
+              env:
+                  DWARF_HOME: ~/.dwarf
               run: |
                   cd dwarf
                   cargo xtask install
@@ -84,6 +86,7 @@ jobs:
             - name: Upload coverage reports to Codecov
               uses: codecov/codecov-action@v3
               env:
+                  DWARF_HOME: ~/.dwarf
                   CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
               with:
                   working-directory: .
