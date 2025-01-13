@@ -1,0 +1,6 @@
+fn main() {
+    let s = "42";
+    chacha::assert_eq(chacha::type_of(s), "string");
+    let i = 42;
+    chacha::assert_eq(chacha::type_of(i), "int");
+}

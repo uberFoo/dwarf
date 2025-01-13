@@ -29,13 +29,19 @@ use xshell::{cmd, Shell};
 fn main() -> anyhow::Result<()> {
     let flags = flags::Xtask::from_env_or_exit();
 
+    let dwarf_home = env::var("DWARF_HOME").unwrap_or_else(|_| {
+        let mut home = env::var("HOME").unwrap();
+        home.push_str("/.dwarf");
+        home
+    });
+
     let sh = &Shell::new()?;
     sh.change_dir(project_root());
 
     match flags.subcommand {
         flags::XtaskCmd::Package(cmd) => cmd.run(sh),
-        flags::XtaskCmd::Plugin(cmd) => cmd.run(sh),
-        flags::XtaskCmd::Install(cmd) => cmd.run(sh),
+        flags::XtaskCmd::Plugin(cmd) => cmd.run(sh, &dwarf_home),
+        flags::XtaskCmd::Install(cmd) => cmd.run(sh, &dwarf_home),
     }
 }
 

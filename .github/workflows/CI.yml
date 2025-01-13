@@ -70,19 +70,23 @@ jobs:
               uses: taiki-e/install-action@cargo-llvm-cov
 
             - name: Install dwarf
+              env:
+                  DWARF_HOME: /home/runner/.dwarf
               run: |
                   cd dwarf
                   cargo xtask install
                   cargo xtask plugin
+                  ls -l ~/.dwarf/
 
             - name: Build and run tests with coverage
               run: |
                   cd dwarf
-                  RUST_MIN_STACK=6291456 cargo llvm-cov --lcov --output-path coverage.lcov --no-default-features --features "multi-vec, repl, async"
+                  RUST_MIN_STACK=6291456 cargo llvm-cov --lcov --output-path coverage.lcov --no-default-features --features "lu-dog-rc, repl, async"
 
             - name: Upload coverage reports to Codecov
               uses: codecov/codecov-action@v3
               env:
+                  DWARF_HOME: /home/runner/.dwarf
                   CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
               with:
                   working-directory: .

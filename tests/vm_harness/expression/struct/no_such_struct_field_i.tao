@@ -1,7 +1,0 @@
-struct Foo {
-    bar: int,
-}
-
-fn main() {
-    let f = Foo { bar: 42, baz: true };
-}

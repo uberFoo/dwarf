@@ -1,0 +1,6 @@
+async fn main() -> Future<()> {
+    let a = async { 42 };
+
+    let b = a.await;
+    chacha::assert_eq(b, 42);
+}

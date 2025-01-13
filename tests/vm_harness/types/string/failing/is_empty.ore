@@ -1,7 +1,0 @@
-fn main() {
-    let a = "Hello, World!";
-    let b = "";
-
-    chacha::assert_eq(a.is_empty(), false);
-    chacha::assert_eq(b.is_empty(), true);
-}

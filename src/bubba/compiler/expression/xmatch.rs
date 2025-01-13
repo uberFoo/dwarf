@@ -1,4 +1,4 @@
-use snafu::{location, Location};
+use snafu::location;
 use uuid::Uuid;
 
 use crate::{
@@ -26,7 +26,23 @@ pub(in crate::bubba::compiler) fn compile(
     let match_expr = lu_dog.exhume_x_match(expr).unwrap();
     let match_expr = s_read!(match_expr);
 
-    let patterns = match_expr.r87_pattern(&lu_dog);
+    // This only returns the first one found. That's a bug.
+    let mut pattern = match_expr.r87_pattern(&lu_dog)[0].clone();
+    let mut patterns = Vec::new();
+    // Iterate over the previous until we reach the beginning.
+    while !s_read!(pattern).r256c_pattern(&lu_dog).is_empty() {
+        let pat = s_read!(pattern).r256c_pattern(&lu_dog)[0].clone();
+        pattern = pat;
+    }
+
+    patterns.push(pattern.clone());
+
+    while !s_read!(pattern).r256_pattern(&lu_dog).is_empty() {
+        let pat = s_read!(pattern).r256_pattern(&lu_dog)[0].clone();
+        pattern = pat;
+        patterns.push(pattern.clone());
+    }
+
     let scrutinee = match_expr.r91_expression(&lu_dog)[0].clone();
 
     let label = format!("{}", Uuid::new_v4());
@@ -208,20 +224,24 @@ pub(in crate::bubba::compiler) fn compile(
 
 #[cfg(test)]
 mod test {
-    use std::env;
+    use std::{
+        env,
+        sync::{Arc, RwLock},
+    };
 
     use test_log::test;
 
     use crate::{
-        bubba::compiler::{
-            test::{get_dwarf_home, run_vm, setup_logging},
-            *,
+        bubba::{
+            compiler::{
+                test::{get_dwarf_home, run_vm, setup_logging},
+                *,
+            },
+            new_ref, s_read as ref_read, RefType,
         },
         chacha::value::{Enum, TupleEnum},
         dwarf::{new_lu_dog, parse_dwarf},
-        new_ref,
         sarzak::MODEL as SARZAK_MODEL,
-        NewRef,
     };
 
     #[test]
@@ -243,18 +263,19 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
 
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 31);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(1));
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &Value::Integer(1));
     }
 
     #[test]
@@ -279,18 +300,19 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
 
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 33);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &4.into());
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &4.into());
     }
 
     #[test]
@@ -303,7 +325,7 @@ mod test {
                            1 => 1,
                            2 => 2,
                            3 => 3,
-                           _ => 4,
+                           4 => 4,
                        }
                    }";
         let ast = parse_dwarf("match_expression", ore).unwrap();
@@ -312,44 +334,46 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 31);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 29);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &3.into());
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &3.into());
     }
 
     #[test]
     fn match_string_literal_expression() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "
+        let ore = r#"
                    fn main() -> string {
-                       match \"foo\" {
-                           \"bar\" => \"bar\",
-                           \"foo\" => \"foo\",
-                           \"baz\" => \"baz\",
-                           _ => \"qux\",
+                       match "foo" {
+                           "bar" => "bar",
+                           "foo" => "foo",
+                           "baz" => "baz",
+                           _ => "qux",
                        }
-                   }";
+                   }"#;
         let ast = parse_dwarf("match_expression", ore).unwrap();
         let ctx = new_lu_dog(
             "match_expression".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
@@ -357,7 +381,7 @@ mod test {
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 31);
 
         assert_eq!(
-            &*s_read!(run_vm(&program).unwrap()),
+            &*ref_read!(run_vm(&program).unwrap()),
             &Value::String("foo".to_owned())
         );
     }
@@ -385,6 +409,7 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
@@ -397,7 +422,7 @@ mod test {
             ValueType::new_enumeration(true, &woog_enum, &mut lu_dog)
         };
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
@@ -405,8 +430,12 @@ mod test {
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 32);
 
         assert_eq!(
-            &*s_read!(run_vm(&program).unwrap()),
-            &Value::Enumeration(Enum::Unit(ty, "::Foo".to_owned(), "Bar".to_owned()))
+            &*ref_read!(run_vm(&program).unwrap()),
+            &Value::Enumeration(Enum::Unit(
+                Arc::new(RwLock::new(s_read!(ty).clone())),
+                "::Foo".to_owned(),
+                "Bar".to_owned()
+            ))
         );
     }
 
@@ -433,6 +462,7 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
@@ -444,10 +474,10 @@ mod test {
             .unwrap();
         let woog_enum = s_read!(lu_dog).exhume_enumeration(&id).unwrap();
         let ty = ValueType::new_enumeration(true, &woog_enum, &mut s_write!(lu_dog));
-        let user_enum = TupleEnum::new("Bar", new_ref!(Value, Value::Integer(42)));
+        let user_enum = TupleEnum::new("Bar", new_ref!(Value, 42.into()));
         let user_enum = new_ref!(TupleEnum<Value>, user_enum);
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
@@ -455,8 +485,14 @@ mod test {
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 65);
 
         assert_eq!(
-            &*s_read!(run_vm(&program).unwrap()),
-            &Value::Enumeration(Enum::Tuple((ty, "::Foo".to_owned()), user_enum))
+            &*ref_read!(run_vm(&program).unwrap()),
+            &Value::Enumeration(Enum::Tuple(
+                (
+                    Arc::new(RwLock::new(s_read!(ty).clone())),
+                    "::Foo".to_owned()
+                ),
+                user_enum
+            ))
         );
     }
 
@@ -484,18 +520,19 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak_store,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
 
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 50);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(42));
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &Value::Integer(42));
     }
 
     #[test]
@@ -522,18 +559,19 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak_store,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
 
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 56);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(42));
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &Value::Integer(42));
     }
 
     #[test]
@@ -566,18 +604,19 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak_store,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
 
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 58);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(42));
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &Value::Integer(42));
     }
 
     #[test]
@@ -586,12 +625,15 @@ mod test {
         let sarzak_store = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
 use std::result::Result;
+
 struct A {
     inner: int,
 }
+
 struct B {
     inner: int,
-  }
+}
+
 fn main() -> Result<A, B> {
     let result = Result::Err(96);
     let foo = match result {
@@ -607,6 +649,7 @@ fn main() -> Result<A, B> {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak_store,
         )
         .unwrap_or_else(|e| {
@@ -616,7 +659,7 @@ fn main() -> Result<A, B> {
             panic!("Failed to create lu_dog");
         });
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 4);

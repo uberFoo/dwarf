@@ -14,7 +14,8 @@ use abi_stable::{
     std_types::{RBox, RErr, ROk, RResult, RStr, RVec},
 };
 use dwarf::{
-    chacha::{error::ChaChaError, ffi_value::FfiValue},
+    bubba::error::BubbaError,
+    chacha::ffi_value::FfiValue,
     plug_in::{Error, LambdaCall, Plugin, PluginModRef, PluginModule, PluginType, Plugin_TO},
     DwarfInteger,
 };
@@ -106,12 +107,10 @@ mod env {
             match ty.as_str() {
                 "Var" => match func.as_str() {
                     "var" => {
-                        let var: String = args
-                            .first()
-                            .unwrap()
-                            .try_into()
-                            .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                            .unwrap();
+                        let var: String = match args.get(0).unwrap().try_into() {
+                            Ok(var) => var,
+                            Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                        };
 
                         let var = std::env::var(var);
                         let result = match var {
@@ -122,19 +121,15 @@ mod env {
                         Ok(FfiValue::Result(result).into())
                     }
                     "set_var" => {
-                        let key: String = args
-                            .first()
-                            .unwrap()
-                            .try_into()
-                            .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                            .unwrap();
+                        let key: String = match args.get(0).unwrap().try_into() {
+                            Ok(var) => var,
+                            Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                        };
 
-                        let value: String = args
-                            .get(1)
-                            .unwrap()
-                            .try_into()
-                            .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                            .unwrap();
+                        let value: String = match args.get(1).unwrap().try_into() {
+                            Ok(var) => var,
+                            Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                        };
 
                         std::env::set_var(key, value);
 
@@ -230,12 +225,10 @@ mod fs {
                 "File" => match func.as_str() {
                     "open" => {
                         tracing::trace!("open enter");
-                        let path: String = args
-                            .first()
-                            .unwrap()
-                            .try_into()
-                            .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                            .unwrap();
+                        let path: String = match args.get(0).unwrap().try_into() {
+                            Ok(var) => var,
+                            Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                        };
 
                         let file = File::open(path);
                         let result = match file {
@@ -257,12 +250,10 @@ mod fs {
                         Ok(FfiValue::Result(result))
                     }
                     "read" => {
-                        let key: DwarfInteger = args
-                            .first()
-                            .unwrap()
-                            .try_into()
-                            .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                            .unwrap();
+                        let key: DwarfInteger = match args.get(0).unwrap().try_into() {
+                            Ok(var) => var,
+                            Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                        };
 
                         let mut buf = String::new();
                         let file = self.files.get_mut(key as usize).unwrap();

@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use log::debug;
 use rustc_hash::FxHashMap as HashMap;
-use snafu::{location, Location};
+use snafu::location;
 use uuid::Uuid;
 
 use crate::{
@@ -241,12 +241,16 @@ pub fn inter(
         } else {
             cfg_if::cfg_if! {
                 if #[cfg(not(feature="debug"))] {
-                    lu_dog.inter_span(|id| {
-                        let mut span = s_read!(field_expr.1).clone();
-                        span.x_value = Some(s_read!(value).id);
-                        span.id = id;
-                        new_ref!(LuDogSpan, span)
-                    });
+                    let mut span = s_read!(field_expr.1).clone();
+                    span.x_value = Some(s_read!(value).id);
+                    span.id = Uuid::new_v4();
+                    lu_dog.inter_span(new_ref!(LuDogSpan, span));
+                    // lu_dog.inter_span(|id| {
+                    //     let mut span = s_read!(field_expr.1).clone();
+                    //     span.x_value = Some(s_read!(value).id);
+                    //     span.id = id;
+                    //     new_ref!(LuDogSpan, span)
+                    // });
                 } else {
                     let span = LuDogSpan::new(
                         s_read!(field_expr.1).end,

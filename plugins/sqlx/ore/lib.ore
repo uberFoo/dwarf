@@ -103,6 +103,7 @@ impl Pool {
             query: query,
             pool: self.inner,
             bindings: [],
+            binding_types: [],
         }
     }
 }
@@ -155,8 +156,13 @@ struct Map {
     /// The bindings for the query.
     ///
     /// This should be a heterogenous list -- it works as is though, which is scary.
+    /// Well, not totally scary. Everything that is pushed is a string, so it type
+    /// checks fine. The scary thing I guess is that SQL manages the type conversions?
     /// It's not a heterogenous list because dwarf doesn't support that as a type yet.
+    ///
+    /// And maybe I'm wrong and it should just be a string.
     bindings: [string],
+    binding_types: [Type]
 }
 
 impl Map {
@@ -182,8 +188,23 @@ impl Map {
     /// let map = map.bind("1");
     /// # }
     /// ```
-    fn bind(self, value: string) -> Map {
+    fn bind_string(self, value: string) -> Map {
         self.bindings.push(value);
+        self.binding_types.push(Type::String);
+
+        self
+    }
+
+    fn bind_integer(self, value: int) -> Map {
+        self.bindings.push(value as string);
+        self.binding_types.push(Type::Integer);
+
+        self
+    }
+
+    fn bind_short(self, value: int) -> Map {
+        self.bindings.push(value as string);
+        self.binding_types.push(Type::Short);
 
         self
     }
@@ -211,7 +232,7 @@ impl Map {
     fn execute(self) -> Result<[Row], Error> {
         let rows = self
             .plugin
-            .invoke_func("sqlx", "Map", "execute", @[self.query, self.pool, self.bindings]);
+            .invoke_func("sqlx", "Map", "execute", @[self.query, self.pool, self.bindings, self.binding_types]);
 
         match rows {
             Result::Ok(rows) => Result::<[Row], Error>::Ok(rows),
@@ -268,6 +289,7 @@ impl Map {
             func: bounce,
             pool: self.pool,
             bindings: self.bindings,
+            binding_types: self.binding_types,
         }
     }
 }
@@ -282,17 +304,16 @@ struct Query<T> {
     // func: fn(Row) -> T,
     pool: int,
     /// The bindings for the query.
-    ///
-    /// This should be a heterogenous list -- it works as is though, which is scary.
-    /// It's not a heterogenous list because dwarf doesn't support that as a type yet.
     bindings: [string],
+    /// The type of each binding.
+    binding_types: [Type]
 }
 
 impl Query<T> {
     fn fetch_all(self) -> Result<[Row], Error> {
         let rows = self
             .plugin
-            .invoke_func("sqlx", "Query", "query_all", @[self.query, self.pool, self.func, self.bindings]);
+            .invoke_func("sqlx", "Query", "query_all", @[self.query, self.pool, self.func, self.bindings, self.binding_types]);
 
         match rows {
             Result::Ok(rows) => Result::<[Row], Error>::Ok(rows),
@@ -335,7 +356,7 @@ impl Query<T> {
     fn fetch_one(self) -> Result<Row, Error> {
         let row = self
             .plugin
-            .invoke_func("sqlx", "Query", "query_one", @[self.query, self.pool, self.func, self.bindings]);
+            .invoke_func("sqlx", "Query", "query_one", @[self.query, self.pool, self.func, self.bindings, self.binding_types]);
 
         match row {
             Result::Ok(row) => Result::<Row, Error>::Ok(row),

@@ -1,8 +1,7 @@
 use std::ops::Range;
 
 use ansi_term::Colour;
-use snafu::{location, Location};
-use uuid::Uuid;
+use snafu::location;
 
 use crate::{
     dwarf::{
@@ -123,7 +122,7 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
         PrintableValueType(true, &instance_ty, context, lu_dog).to_string()
     );
     let ty = match s_read!(instance_ty).subtype {
-        ValueTypeEnum::AnyList(ref list) => match method.as_str() {
+        ValueTypeEnum::AnyList(_) => match method.as_str() {
             JOIN => {
                 let ty = Ty::new_z_string(context.sarzak);
                 ValueType::new_ty(true, &ty, lu_dog)
@@ -256,11 +255,13 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
                 let inner_ty = lu_dog.exhume_value_type(&inner_ty).unwrap();
                 let r_inner_ty = s_read!(inner_ty);
 
-                if &*s_read!(arg_ty) != &*r_inner_ty {
+                if s_read!(arg_ty).subtype != r_inner_ty.subtype {
                     // let expected_span = &inner_ty.r62_span(lu_dog)[0];
                     // let expected_span = s_read!(expected_span);
                     // let expected_span = expected_span.start as usize..expected_span.end as usize;
                     let expected_span = 0..0;
+
+                    dbg!(&arg_ty, &r_inner_ty);
 
                     return Err(vec![DwarfError::TypeMismatch {
                         expected: PrintableValueType(true, &inner_ty, context, lu_dog).to_string(),

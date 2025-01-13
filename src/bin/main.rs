@@ -7,43 +7,27 @@ use std::{
     thread,
 };
 
-#[cfg(feature = "async")]
-use futures_lite::future;
-
-// #[cfg(feature = "async")]
-// use dwarf::chacha::interpreter::Executor;
-
 use clap::{ArgAction, Args, Parser};
 use dap::{prelude::BasicClient, server::Server};
 use dotenvy::dotenv;
 
-// #[cfg(feature = "async")]
-// use smol::future;
 #[cfg(feature = "async")]
 use tracing_subscriber::{
     fmt::{self, format},
     EnvFilter, FmtSubscriber,
 };
 
-#[cfg(feature = "async")]
-use dwarf::ref_to_inner;
-
 use dwarf::{
     bubba::{
         compiler::{compile, BubbaCompilerErrorReporter},
         error::BubbaErrorReporter,
         value::Value as BubbaValue,
-        Program, VM,
+        Program, RefType, VM,
     },
-    chacha::{
-        dap::DapAdapter,
-        error::{ChaChaError, ChaChaErrorReporter},
-        interpreter::{banner2, initialize_interpreter, start_func, start_repl},
-    },
+    chacha::{banner::banner2, dap::DapAdapter},
     dwarf::{new_lu_dog, parse_dwarf},
-    new_ref, s_read,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
-    Context, NewRef, RefType, Value, BUILD_TIME, VERSION,
+    Context, BUILD_TIME, VERSION,
 };
 use reqwest::Url;
 #[cfg(feature = "tracy")]
@@ -80,7 +64,7 @@ fn validate_source(s: &str) -> Result<Source, String> {
     long_about = r#"
 This is dwarf.
 
-This file encompasses the interpreter, the compiler, and the virtual machine.
+This file encompasses the compiler, and the virtual machine.
 
 By default, with no arguments you will be dropped into a REPL. If you pass
 a source file, it will be compiled and executed, and then return to your shell.
@@ -89,7 +73,7 @@ This default behavior may be modified by using any of the options below.
 "#
 )]
 #[command(propagate_version = true)]
-/// This is the dwarf interpreter, ChaCha.
+/// This is the dwarf VM.
 ///
 /// By default, with no arguments you will be dropped into a REPL. If you pass
 /// a source file, it will be executed and return to your shell.
@@ -143,11 +127,6 @@ struct Arguments {
     /// The number of threads to use for the executor. Defaults to the number of cpus.
     #[arg(long)]
     threads: Option<usize>,
-    /// Use Interpreter
-    ///
-    /// With this option the interpreter will be used instead of the VM.
-    #[arg(long, short, action=ArgAction::SetTrue)]
-    interpreter: Option<bool>,
     /// Verbose output
     ///
     /// Print verbose output.
@@ -208,7 +187,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let is_uber = args.uber.is_some() && args.uber.unwrap();
     let print_ast = args.ast.is_some() && args.ast.unwrap();
     let threads = args.threads.unwrap_or_else(num_cpus::get);
-    let interpreter = args.interpreter.is_some() && args.interpreter.unwrap();
     let trace = args.trace.is_some() && args.trace.unwrap();
 
     if threads == 0 {
@@ -268,7 +246,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
 
-    let dwarf_home = env::var("DWARF_HOME")
+    let dwarf_home: PathBuf = env::var("DWARF_HOME")
         .unwrap_or_else(|_| {
             let mut home = env::var("HOME").unwrap();
             home.push_str("/.dwarf");
@@ -296,95 +274,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if let Some((source_code, dwarf_args, file_name, source_meta)) = input {
         if args.repl.is_some() && args.repl.unwrap() {
-            let ctx = match get_context(
-                &file_name,
-                &source_code,
-                &dwarf_home,
-                &sarzak,
-                is_uber,
-                print_ast,
-            ) {
-                Some(ctx) => ctx,
-                None => return Ok(()),
-            };
-            let mut ctx = initialize_interpreter(threads, dwarf_home, ctx).map_err(|e| {
-                println!("Interpreter exited with: {}", e);
-                e
-            })?;
-            ctx.add_args(dwarf_args);
-            start_repl(&mut ctx, is_uber, threads, trace)
-                .map_err(|e| {
-                    println!("Interpreter exited with: {}", e);
-                    e
-                })
-                .unwrap();
-        } else if interpreter {
-            let ctx = match get_context(
-                &file_name,
-                &source_code,
-                &dwarf_home,
-                &sarzak,
-                is_uber,
-                print_ast,
-            ) {
-                Some(ctx) => ctx,
-                None => return Ok(()),
-            };
-            let mut ctx = initialize_interpreter(threads, dwarf_home, ctx)?;
-            ctx.add_args(dwarf_args);
-            match start_func("main", false, &mut ctx) {
-                // 🚧 What's a sensible thing to do with this?
-                #[allow(unused_variables)]
-                Ok(value) => {
-                    #[cfg(feature = "async")]
-                    {
-                        unsafe {
-                            let value = std::sync::Arc::into_raw(value);
-                            let value = std::ptr::read(value);
-                            let value = ref_to_inner!(value);
-
-                            let value = future::block_on(value);
-
-                            let value = std::sync::Arc::into_raw(value);
-                            let value = std::ptr::read(value);
-                            let value = ref_to_inner!(value);
-
-                            match value {
-                                Value::Error(msg) => {
-                                    let msg = *msg;
-                                    eprintln!("Interpreter exited with:");
-                                    eprintln!(
-                                        "{}",
-                                        ChaChaErrorReporter(
-                                            &msg.into(),
-                                            is_uber,
-                                            &source_code,
-                                            &file_name
-                                        )
-                                    );
-                                }
-                                _ => println!("{}", value),
-                            }
-                        }
-                    }
-
-                    Ok::<(), ChaChaError>(())
-                }
-                Err(e) => {
-                    eprintln!("Interpreter exited with:");
-                    eprintln!(
-                        "{}",
-                        ChaChaErrorReporter(&e, is_uber, &source_code, &file_name)
-                    );
-                    Ok(())
-                }
-            }
-            .unwrap();
+            eprintln!("The REPL is currently out of commission.");
+            // let ctx = match get_context(
+            //     &file_name,
+            //     &source_code,
+            //     &dwarf_home,
+            //     &sarzak,
+            //     is_uber,
+            //     print_ast,
+            // ) {
+            //     Some(ctx) => ctx,
+            //     None => return Ok(()),
+            // };
+            // let mut ctx = initialize_interpreter(threads, dwarf_home, ctx).map_err(|e| {
+            //     println!("Interpreter exited with: {}", e);
+            //     e
+            // })?;
+            // ctx.add_args(dwarf_args);
+            // start_repl(&mut ctx, is_uber, threads, trace)
+            //     .map_err(|e| {
+            //         println!("Interpreter exited with: {}", e);
+            //         e
+            //     })
+            //     .unwrap();
         } else {
             // Running in the VM
             //
             // We will check $DWARF_HOME/compiled for a file named according to:
-            //      [hash(path_to_source)]_source_name.[ore|tao|*].gp
+            //      [hash(path_to_source)]_source_name.[ore|tao].gp
             // If we find it, we will compare timestamps, and recompile if the
             // source is newer than the gp file. Otherwise we'll just load the
             // file and go.
@@ -412,15 +329,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Compare timestamps of source and gp file.
                 let source_meta = source_meta.unwrap();
                 let gp_meta = fs::metadata(path).map_err(|e| {
-                    eprintln!("Unable to read gp file: {}", e);
+                    eprintln!("Unable to read gp file metadata: {}", e);
                     e
                 })?;
                 let source_time = source_meta.modified().map_err(|e| {
-                    eprintln!("Unable to read source file: {}", e);
+                    eprintln!("Unable to read source file modified time: {}", e);
                     e
                 })?;
                 let gp_time = gp_meta.modified().map_err(|e| {
-                    eprintln!("Unable to read gp file: {}", e);
+                    eprintln!("Unable to read gp file modified time: {}", e);
                     e
                 })?;
 
@@ -433,6 +350,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         is_uber,
                         print_ast,
                         path,
+                        bless,
                     )?
                 } else {
                     let bin_file = fs::File::open(path).map_err(|e| {
@@ -457,6 +375,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             is_uber,
                             print_ast,
                             path,
+                            bless,
                         )?
                     } else {
                         program
@@ -471,6 +390,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     is_uber,
                     print_ast,
                     path,
+                    bless,
                 )?
             };
 
@@ -486,7 +406,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Get args and call the VM.
             let args: Vec<RefType<BubbaValue>> = dwarf_args
                 .into_iter()
-                .map(|a| new_ref!(BubbaValue, a.into()))
+                .map(|a| std::sync::Arc::new(std::sync::RwLock::new(a.into())))
                 .collect();
 
             #[cfg(feature = "async")]
@@ -505,7 +425,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
 
-            let value = s_read!(value);
+            let value = value.read().unwrap();
             match &*value {
                 BubbaValue::Error(msg) => {
                     eprintln!(
@@ -559,13 +479,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // }
         }
     } else {
-        let ctx = Context::default();
-        let mut ctx = initialize_interpreter(2, dwarf_home, ctx)?;
+        eprintln!("No source file specified.");
+        // let ctx = Context::default();
+        // let mut ctx = initialize_interpreter(2, dwarf_home, ctx)?;
 
-        start_repl(&mut ctx, is_uber, threads, trace).map_err(|e| {
-            println!("Interpreter exited with: {}", e);
-            e
-        })?;
+        // start_repl(&mut ctx, is_uber, threads, trace).map_err(|e| {
+        //     println!("Interpreter exited with: {}", e);
+        //     e
+        // })?;
     }
 
     Ok(())
@@ -578,6 +499,7 @@ fn get_context(
     sarzak: &SarzakStore,
     is_uber: bool,
     print_ast: bool,
+    silent: bool,
 ) -> Option<Context> {
     let ast = match parse_dwarf(&file_name, &source_code) {
         Ok(ast) => ast,
@@ -595,9 +517,10 @@ fn get_context(
         Some((source_code.clone(), &ast)),
         &dwarf_home,
         &env::current_dir().unwrap(),
+        silent,
         &sarzak,
     ) {
-        Ok(lu_dog) => Some(lu_dog),
+        Ok(context) => Some(context),
         Err(errors) => {
             for err in errors {
                 eprintln!("{}", dwarf::dwarf::error::DwarfErrorReporter(&err, is_uber));
@@ -615,6 +538,7 @@ fn compile_program(
     is_uber: bool,
     print_ast: bool,
     path: &Path,
+    silent: bool,
 ) -> Result<Program, Box<dyn std::error::Error>> {
     let ctx = match get_context(
         &file_name,
@@ -623,13 +547,14 @@ fn compile_program(
         &sarzak,
         is_uber,
         print_ast,
+        silent,
     ) {
         Some(ctx) => ctx,
         None => {
             std::process::exit(1);
         }
     };
-    match compile(&ctx) {
+    match compile(&ctx, true) {
         Ok(program) => {
             // Write the compiled program to disk.
             let bin_file = fs::File::create(path)?;

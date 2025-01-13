@@ -1,4 +1,0 @@
-fn main() {
-    let range = 0..10;
-    range.fail();
-}

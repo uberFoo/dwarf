@@ -4,13 +4,11 @@ use walkdir::WalkDir;
 
 const EXT1: &str = "tao";
 const EXT2: &str = "ore";
-const INTERP_HARNESS_DIR: &str = "harness";
-const INTERP_OUT_NAME: &str = "tests.rs";
+const HARNESS_DIR: &str = "harness";
+const OUT_NAME: &str = "tests.rs";
 const SRC_DIR: &str = "src";
 const TEST_DIR: &str = "tests";
 const TEST_FAILED: &str = "TEST_FAILED";
-const VM_HARNESS_DIR: &str = "vm_harness";
-const VM_OUT_NAME: &str = "vm_tests.rs";
 
 fn main() {
     // Create a timestamp file
@@ -21,19 +19,13 @@ fn main() {
     // write!(f, r#""{}""#, time::OffsetDateTime::now_utc()).unwrap();
     write!(f, r#""{}""#, chrono::Utc::now().to_rfc3339()).unwrap();
 
-    // Generate the interpreter tests
-    let tests = generate_tests(INTERP_HARNESS_DIR);
-    let dest_path = Path::new(&out_dir).join(INTERP_OUT_NAME);
-    fs::write(dest_path, tests).unwrap();
-
-    // VM Tests
-    let tests = generate_tests(VM_HARNESS_DIR);
-    let dest_path = Path::new(&out_dir).join(VM_OUT_NAME);
+    // Generate the harness tests
+    let tests = generate_tests(HARNESS_DIR);
+    let dest_path = Path::new(&out_dir).join(OUT_NAME);
     fs::write(dest_path, tests).unwrap();
 
     println!("cargo:rerun-if-changed={SRC_DIR}");
-    println!("cargo:rerun-if-changed={TEST_DIR}/{INTERP_HARNESS_DIR}");
-    println!("cargo:rerun-if-changed={TEST_DIR}/{VM_HARNESS_DIR}");
+    println!("cargo:rerun-if-changed={TEST_DIR}/{HARNESS_DIR}");
 }
 
 fn generate_tests(path: &str) -> String {

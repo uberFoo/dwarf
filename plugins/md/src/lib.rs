@@ -9,7 +9,8 @@ use abi_stable::{
     std_types::{RErr, ROk, RResult, RStr, RVec},
 };
 use dwarf::{
-    chacha::{error::ChaChaError, ffi_value::FfiValue},
+    bubba::error::BubbaError,
+    chacha::ffi_value::FfiValue,
     plug_in::{Error, LambdaCall, Plugin, PluginModRef, PluginModule, PluginType, Plugin_TO},
 };
 use html_escape::decode_html_entities;
@@ -57,7 +58,15 @@ mod md {
             return ROk(Plugin_TO::from_value(Md::default(), TD_Opaque));
         }
 
-        let mode: String = args.pop().unwrap().try_into().unwrap();
+        let mode: String = match args
+            .pop()
+            .unwrap()
+            .try_into()
+            .map_err(|e: BubbaError| Error::Plugin(e.to_string().into()))
+        {
+            Ok(mode) => mode,
+            Err(e) => return RErr(e),
+        };
         ROk(Plugin_TO::from_value(Md::new(mode.into()), TD_Opaque))
     }
 
@@ -153,12 +162,15 @@ mod md {
             match ty.as_str() {
                 "Md" => match func.as_str() {
                     "to_html" => {
-                        let md: String = args
+                        let md: String = match args
                         .first()
                         .unwrap()
                         .try_into()
-                        .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                        .unwrap();
+                        .map_err(|e: BubbaError| Error::Plugin(e.to_string().into()))
+                        {
+                            Ok(md) => md,
+                            Err(e) => return RErr(e),
+                        };
 
                     let options = markdown::Options {
                         parse: ParseOptions::gfm(),

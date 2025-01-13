@@ -1,7 +1,0 @@
-fn takes_two(a: int, b: int) -> int {
-    a + b
-}
-
-fn main() {
-    takes_two(1, 2, 3);
-}

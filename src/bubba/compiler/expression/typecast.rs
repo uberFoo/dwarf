@@ -1,13 +1,15 @@
-use snafu::{location, Location};
+use snafu::location;
 
 use crate::{
     bubba::{
         compiler::{compile_expression, CThonk, Context, Result},
         instr::Instruction,
+        new_ref,
         value::Value,
+        RefType,
     },
     lu_dog::ValueType,
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, POP_CLR,
+    s_read, SarzakStorePtr, Span, POP_CLR,
 };
 
 #[cfg_attr(not(test), tracing::instrument(skip(thonk, context)))]
@@ -43,9 +45,12 @@ mod test {
     use std::env;
 
     use crate::{
-        bubba::compiler::{
-            test::{get_dwarf_home, run_vm, setup_logging},
-            *,
+        bubba::{
+            compiler::{
+                test::{get_dwarf_home, run_vm, setup_logging},
+                *,
+            },
+            s_read as ref_read,
         },
         dwarf::{new_lu_dog, parse_dwarf},
         sarzak::MODEL as SARZAK_MODEL,
@@ -65,17 +70,18 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
 
         println!("{program}");
 
         let result = run_vm(&program);
         dbg!(&result);
         assert!(result.is_ok());
-        assert_eq!(*s_read!(result.unwrap()), true.into());
+        assert_eq!(*ref_read!(result.unwrap()), true.into());
     }
 
     #[test]
@@ -92,17 +98,18 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
 
         println!("{program}");
 
         let result = run_vm(&program);
         dbg!(&result);
         assert!(result.is_ok());
-        assert_eq!(*s_read!(result.unwrap()), 42.into());
+        assert_eq!(*ref_read!(result.unwrap()), 42.into());
     }
 
     #[test]
@@ -119,17 +126,18 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
 
         println!("{program}");
 
         let result = run_vm(&program);
         dbg!(&result);
         assert!(result.is_ok());
-        assert_eq!(*s_read!(result.unwrap()), 42.0.into());
+        assert_eq!(*ref_read!(result.unwrap()), 42.0.into());
     }
 
     #[test]
@@ -146,17 +154,18 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
 
         println!("{program}");
 
         let result = run_vm(&program);
         dbg!(&result);
         assert!(result.is_ok());
-        assert_eq!(*s_read!(result.unwrap()), "42".into());
+        assert_eq!(*ref_read!(result.unwrap()), "42".into());
     }
 
     #[test]
@@ -173,10 +182,11 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
 
         println!("{program}");
 
@@ -184,7 +194,7 @@ mod test {
         dbg!(&result);
         assert!(result.is_ok());
         assert_eq!(
-            *s_read!(result.unwrap()),
+            *ref_read!(result.unwrap()),
             uuid::Uuid::parse_str("7056c5ba-4f49-404f-abd5-e5c6a5879fac")
                 .unwrap()
                 .into()

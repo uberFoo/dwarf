@@ -12,7 +12,7 @@ use clap::Args;
 use rustc_hash::FxHashMap as HashMap;
 use sarzak::sarzak::types::Ty;
 use serde::{Deserialize, Serialize};
-use snafu::{location, Location};
+use snafu::location;
 use uuid::Uuid;
 
 use crate::{
@@ -21,7 +21,7 @@ use crate::{
         store::ObjectStore as LuDogStore, types::ValueType, Block, DwarfSourceFile, Lambda, List,
         LocalVariable, Map, Span as LuDogSpan, Variable, XFuture, XValue,
     },
-    s_read, s_write, RefType, PATH_SEP,
+    s_read, s_write, RefType,
 };
 
 pub mod error;
@@ -739,6 +739,10 @@ impl TryFrom<&InnerAttribute> for String {
             InnerAttribute::Expression((Expression::StringLiteral(s), _)) => Ok(s.to_string()),
             _ => Err(DwarfError::Generic {
                 description: format!("Error converting InnerAttribute to String: {inner:?}."),
+                location: location!(),
+                span: 0..0,
+                file: "try_from".to_owned(),
+                program: "try_from".to_owned(),
             }),
         }
     }

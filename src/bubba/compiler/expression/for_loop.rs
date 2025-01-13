@@ -1,4 +1,4 @@
-use snafu::{location, Location};
+use snafu::location;
 
 use crate::{
     bubba::{
@@ -7,6 +7,7 @@ use crate::{
             STRING,
         },
         instr::Instruction,
+        s_read as ref_read,
         value::Value,
     },
     lu_dog::{ValueType, ValueTypeEnum},
@@ -108,7 +109,7 @@ pub(in crate::bubba::compiler) fn compile(
                 }
                 ValueTypeEnum::Ty(ref ty) => {
                     let ty = sarzak.exhume_ty(ty).unwrap();
-                    let ty = s_read!(ty);
+                    let ty = ref_read!(ty);
 
                     match &*ty {
                         Ty::Integer(_) => {
@@ -270,7 +271,7 @@ pub(in crate::bubba::compiler) fn compile(
         }
         ValueTypeEnum::Ty(ref ty) => {
             let ty = sarzak.exhume_ty(ty).unwrap();
-            let ty = s_read!(ty);
+            let ty = ref_read!(ty);
             match &*ty {
                 Ty::ZString(_) => {
                     let string = context.get_type(STRING).unwrap().clone();
@@ -380,7 +381,7 @@ pub(in crate::bubba::compiler) fn compile(
         }
         ValueTypeEnum::Ty(ref ty) => {
             let ty = sarzak.exhume_ty(ty).unwrap();
-            let ty = s_read!(ty);
+            let ty = ref_read!(ty);
             match &*ty {
                 Ty::ZString(_) => {
                     thonk.insert_instruction_with_span(
@@ -452,9 +453,12 @@ mod test {
     use test_log::test;
 
     use crate::{
-        bubba::compiler::{
-            test::{get_dwarf_home, run_vm, setup_logging},
-            *,
+        bubba::{
+            compiler::{
+                test::{get_dwarf_home, run_vm, setup_logging},
+                *,
+            },
+            s_read as ref_read,
         },
         dwarf::{new_lu_dog, parse_dwarf},
         sarzak::MODEL as SARZAK_MODEL,
@@ -477,18 +481,19 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
 
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 23);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(45));
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &Value::Integer(45));
     }
 
     #[test]
@@ -508,18 +513,19 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
 
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 23);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(17));
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &Value::Integer(17));
     }
 
     #[test]
@@ -541,18 +547,19 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
 
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 40);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(900));
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &Value::Integer(900));
     }
 
     #[test]
@@ -573,18 +580,19 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
 
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 25);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(45));
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &Value::Integer(45));
     }
 
     #[test]
@@ -608,18 +616,19 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
 
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 2);
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 7);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(45));
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &Value::Integer(45));
     }
 
     #[test]
@@ -640,18 +649,19 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
 
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 37);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(15));
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &Value::Integer(15));
     }
 
     #[test]
@@ -672,11 +682,12 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
 
         println!("{program}");
 
@@ -684,7 +695,7 @@ mod test {
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 36);
 
         assert_eq!(
-            &*s_read!(run_vm(&program).unwrap()),
+            &*ref_read!(run_vm(&program).unwrap()),
             &Value::String("uber".to_owned())
         );
     }

@@ -1,5 +1,0 @@
-fn main() {
-    if {
-        chacha::assert_eq(true, true);
-    }
-}

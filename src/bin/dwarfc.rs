@@ -79,6 +79,10 @@ fn find_package_dir(start_dir: &Option<PathBuf>) -> Result<PathBuf> {
     if !output.status.success() {
         return Err(vec![dwarf::dwarf::error::DwarfError::Generic {
             description: "cargo locate-project failed".to_owned(),
+            location: location!(),
+            span: 0..0,
+            file: "locate-project".to_owned(),
+            program: "locate-project".to_owned(),
         }]);
     }
 
@@ -157,6 +161,7 @@ fn main() -> Result<()> {
         Some((source_code.clone(), &ast)),
         &dwarf_home,
         &env::current_dir().unwrap(),
+        false,
         &sarzak,
     ) {
         Ok(lu_dog) => lu_dog,

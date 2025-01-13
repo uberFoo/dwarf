@@ -4,7 +4,10 @@ use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
 use serde::{Deserialize, Serialize};
 
-use crate::{bubba::value::Value, s_read, RefType, Span};
+use crate::{
+    bubba::{s_read, value::Value, RefType},
+    Span,
+};
 
 /// Instruction
 ///
@@ -68,6 +71,7 @@ pub enum Instruction {
     /// -- from 16 bytes to 24.
     ///
     Comment(String),
+    CreateTask(usize),
     /// Deconstruct a struct expression
     ///
     /// Given a struct expression, like Foo::Bar(x, y), this instruction will pop the
@@ -189,6 +193,13 @@ pub enum Instruction {
     LocalCardinality(String),
     /// Make a Lambda Pointer Value
     ///
+    /// This is a precursor to a task. The [`AsyncCall`] and [`AsyncSpawn`]
+    /// instructions. Or rather the input to those instructions.
+    ///
+    /// It takes a string which is the name of the function we are calling, and
+    /// a usize which is the arity of the function.
+    ///
+    /// It will return a [`LambdaPointer`] value.
     MakeLambdaPointer(String, usize),
     /// Map Get
     ///
@@ -468,6 +479,12 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("nop "),
                 operand_style.paint(comment)
             ),
+            Instruction::CreateTask(arity) => write!(
+                f,
+                "{} {}",
+                opcode_style.paint("ctsk"),
+                operand_style.paint(arity.to_string())
+            ),
             Instruction::DeconstructStructExpression => write!(f, "{}", opcode_style.paint("dse ")),
             Instruction::Divide => write!(f, "{}", opcode_style.paint("div ")),
             Instruction::Dup => write!(f, "{}", opcode_style.paint("dup ")),
@@ -611,7 +628,7 @@ impl fmt::Display for Instruction {
             Instruction::TestLessThan => write!(f, "{}", opcode_style.paint("lt  ")),
             Instruction::TestLessThanOrEqual => write!(f, "{}", opcode_style.paint("lte ")),
             Instruction::TestNotEqual => write!(f, "{}", opcode_style.paint("ne  ")),
-            Instruction::ToString => write!(f, "{}", opcode_style.paint("ts  ")),
+            Instruction::ToString => write!(f, "{}", opcode_style.paint("tostr")),
             Instruction::TypeCast(name) => write!(
                 f,
                 "{} {}",
@@ -657,6 +674,10 @@ impl Program {
 
     pub(crate) fn get_symbol(&self, name: &str) -> Option<&Value> {
         self.symbols.get(name)
+    }
+
+    pub(crate) fn dump_symbols(&self) {
+        dbg!(&self.symbols);
     }
 
     pub(crate) fn add_thonk(&mut self, thonk: Thonk) {
@@ -736,12 +757,14 @@ impl Thonk {
         }
     }
 
+    /// Push an instruction onto the thonk.
     pub(crate) fn add_instruction(&mut self, instr: Instruction, span: Option<Span>) -> usize {
         self.instructions.push(instr);
         self.spans.push(span.unwrap_or_default());
         self.instructions.len() - 1
     }
 
+    /// Prefix an instruction onto the thonk.
     pub(crate) fn prefix_instruction(&mut self, instr: Instruction, span: Option<Span>) -> usize {
         self.instructions.insert(0, instr);
         self.spans.insert(0, span.unwrap_or_default());

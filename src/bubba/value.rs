@@ -1,10 +1,16 @@
-use std::{collections::HashMap, fmt, io::Write, ops::Range};
+use std::{
+    collections::HashMap,
+    fmt,
+    io::Write,
+    ops::Range,
+    sync::{Arc, RwLock},
+};
 
 use ansi_term::Colour;
 #[cfg(feature = "async")]
 use puteketeke::AsyncTask;
 use serde::{Deserialize, Serialize};
-use snafu::{location, Backtrace, Location};
+use snafu::{location, Backtrace};
 
 // #[cfg(feature = "async")]
 // use smol::future;
@@ -14,15 +20,17 @@ use crate::{
     bubba::{
         compiler::Context,
         error::{BubbaError, Error},
+        new_ref, s_read as ref_read, s_try_read, RefType,
     },
     chacha::value::{Enum, Struct},
     lu_dog::{ValueType, ValueTypeEnum},
-    new_ref,
     plug_in::PluginType,
-    s_read, s_try_read,
+    s_read,
     sarzak::Ty,
-    DwarfFloat, DwarfInteger, NewRef, RefType, VmValueResult,
+    DwarfFloat, DwarfInteger,
 };
+
+pub type ValueResult = Result<RefType<crate::bubba::value::Value>, Error>;
 
 #[derive(Default, Deserialize, Serialize)]
 pub enum Value {
@@ -70,7 +78,7 @@ pub enum Value {
     Task {
         name: String,
         running: bool,
-        task: RefType<Option<AsyncTask<'static, VmValueResult>>>,
+        task: RefType<Option<AsyncTask<'static, ValueResult>>>,
     },
     Uuid(uuid::Uuid),
     ValueType(ValueType),
@@ -82,38 +90,6 @@ pub enum HashMapKey {
     Integer(DwarfInteger),
     Uuid(Uuid),
 }
-
-// #[cfg(feature = "async")]
-// impl Future for Value {
-//     type Output = RefType<Value>;
-
-//     fn poll(
-//         self: std::pin::Pin<&mut Self>,
-//         _cx_: &mut std::task::Context<'_>,
-//     ) -> std::task::Poll<Self::Output> {
-//         let this = std::pin::Pin::into_inner(self);
-
-//         match this {
-//             Self::Task {
-//                 name: _,
-//                 running: _,
-//                 task,
-//             } => {
-//                 if let Some(task) = task.take() {
-//                     match future::block_on(task) {
-//                         Ok(value) => std::task::Poll::Ready(value),
-//                         Err(e) => {
-//                             std::task::Poll::Ready(new_ref!(Value, Value::Error(Box::new(e))))
-//                         }
-//                     }
-//                 } else {
-//                     std::task::Poll::Ready(new_ref!(Value, Value::Empty))
-//                 }
-//             }
-//             _ => std::task::Poll::Ready(new_ref!(Value, Value::Empty)),
-//         }
-//     }
-// }
 
 impl Value {
     #[inline]
@@ -129,7 +105,7 @@ impl Value {
         match self {
             Self::AnyList(list) => {
                 write!(f, "[")?;
-                let list = s_read!(list);
+                let list = ref_read!(list);
                 let mut first_time = true;
                 for i in &*list {
                     if first_time {
@@ -138,7 +114,7 @@ impl Value {
                         write!(f, ", ")?;
                     }
 
-                    write!(f, "{}", s_read!(i))?;
+                    write!(f, "{}", ref_read!(i))?;
                 }
                 write!(f, "]")
             }
@@ -157,16 +133,16 @@ impl Value {
             } => {
                 write!(
                     f,
-                    "FubarPointer {{ name: {name}, frame_size: {frame_size}, captures: ["
+                    "LambdaPointer {{ name: {name}, frame_size: {frame_size}, captures: ["
                 )?;
                 for i in captures {
-                    let i = s_read!(i);
+                    let i = ref_read!(i);
                     write!(f, "{i}, ")?;
                 }
                 write!(f, "] }}")
             }
-            Self::List { ty: _, inner } => {
-                let inner = s_read!(inner);
+            Self::List { inner, .. } => {
+                let inner = ref_read!(inner);
                 let mut first_time = true;
                 write!(f, "[")?;
                 for i in &*inner {
@@ -176,25 +152,21 @@ impl Value {
                         write!(f, ", ")?;
                     }
 
-                    write!(f, "{}", s_read!(i))?;
+                    write!(f, "{}", ref_read!(i))?;
                 }
                 write!(f, "]")
             }
-            Self::Map {
-                // key_ty: _,
-                // value_ty: _,
-                inner,
-            } => {
+            Self::Map { inner } => {
                 write!(f, "{{")?;
                 let mut first_time = true;
-                for (key, value) in &*s_read!(inner) {
+                for (key, value) in &*ref_read!(inner) {
                     if first_time {
                         first_time = false;
                     } else {
                         write!(f, ", ")?;
                     }
 
-                    write!(f, "{key}: {value}", key = key, value = s_read!(value))?;
+                    write!(f, "{key}: {value}", key = key, value = ref_read!(value))?;
                 }
                 write!(f, "}}")
             }
@@ -214,9 +186,9 @@ impl Value {
     }
 
     pub(crate) fn get_value_type(&self, context: &Context) -> RefType<ValueType> {
-        let sarzak = context.sarzak_heel().clone();
+        let sarzak = context.sarzak_heel();
         let sarzak = &s_read!(sarzak);
-        let lu_dog = context.lu_dog_heel().clone();
+        let lu_dog = context.lu_dog_heel();
         let lu_dog = &s_read!(lu_dog);
 
         match &self {
@@ -225,7 +197,7 @@ impl Value {
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
                         if ty.read().unwrap().id() == _ty {
-                            return vt.clone();
+                            return Arc::new(RwLock::new(s_read!(vt).clone()));
                         }
                     }
                 }
@@ -234,7 +206,7 @@ impl Value {
             Value::Char(_) => {
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Char(_) = s_read!(vt).subtype {
-                        return vt.clone();
+                        return Arc::new(RwLock::new(s_read!(vt).clone()));
                     }
                 }
                 unreachable!()
@@ -242,14 +214,14 @@ impl Value {
             Value::Empty => {
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Empty(_) = s_read!(vt).subtype {
-                        return vt.clone();
+                        return Arc::new(RwLock::new(s_read!(vt).clone()));
                     }
                 }
                 unreachable!()
             }
             Value::Enumeration(var) => match var {
                 Enum::Unit(t, _, _) => t.clone(),
-                Enum::Struct(ut) => s_read!(ut).get_type().clone(),
+                Enum::Struct(ut) => ref_read!(ut).get_type().clone(),
                 Enum::Tuple((ty, _), _) => ty.clone(),
             },
             Value::Float(_) => {
@@ -257,7 +229,7 @@ impl Value {
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
                         if ty.read().unwrap().id() == _ty {
-                            return vt.clone();
+                            return Arc::new(RwLock::new(s_read!(vt).clone()));
                         }
                     }
                 }
@@ -268,7 +240,7 @@ impl Value {
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
                         if ty.read().unwrap().id() == _ty {
-                            return vt.clone();
+                            return Arc::new(RwLock::new(s_read!(vt).clone()));
                         }
                     }
                 }
@@ -279,8 +251,8 @@ impl Value {
                     if let ValueTypeEnum::List(id) = s_read!(vt).subtype {
                         let list = lu_dog.exhume_list(&id).unwrap();
                         let list_ty = s_read!(list).r36_value_type(lu_dog)[0].clone();
-                        if *s_read!(ty) == *s_read!(list_ty) {
-                            return vt.clone();
+                        if ref_read!(ty).subtype == s_read!(list_ty).subtype {
+                            return Arc::new(RwLock::new(s_read!(vt).clone()));
                         }
                     }
                 }
@@ -291,7 +263,7 @@ impl Value {
                     if let ValueTypeEnum::XPlugin(id) = s_read!(vt).subtype {
                         let plugin = lu_dog.exhume_x_plugin(&id).unwrap();
                         if s_read!(plugin).name == name.as_str() {
-                            return vt.clone();
+                            return Arc::new(RwLock::new(s_read!(vt).clone()));
                         }
                     }
                 }
@@ -300,7 +272,7 @@ impl Value {
             Value::Range(_) => {
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Range(_) = s_read!(vt).subtype {
-                        return vt.clone();
+                        return Arc::new(RwLock::new(s_read!(vt).clone()));
                     }
                 }
                 unreachable!()
@@ -310,7 +282,7 @@ impl Value {
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
                         if ty.read().unwrap().id() == _ty {
-                            return vt.clone();
+                            return Arc::new(RwLock::new(s_read!(vt).clone()));
                         }
                     }
                 }
@@ -322,7 +294,7 @@ impl Value {
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
                         if ty.read().unwrap().id() == _ty {
-                            return vt.clone();
+                            return Arc::new(RwLock::new(s_read!(vt).clone()));
                         }
                     }
                 }
@@ -332,7 +304,7 @@ impl Value {
                 log::error!("Value::get_type() not implemented for {:?}", value);
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Unknown(_) = s_read!(vt).subtype {
-                        return vt.clone();
+                        return Arc::new(RwLock::new(s_read!(vt).clone()));
                     }
                 }
                 unreachable!()
@@ -346,7 +318,7 @@ impl std::fmt::Debug for Value {
         match self {
             Self::AnyList(list) => {
                 write!(f, "[")?;
-                let list = s_read!(list);
+                let list = ref_read!(list);
                 let mut first_time = true;
                 for i in &*list {
                     if first_time {
@@ -355,7 +327,7 @@ impl std::fmt::Debug for Value {
                         write!(f, ", ")?;
                     }
 
-                    write!(f, "{:?}", s_read!(i))?;
+                    write!(f, "{:?}", ref_read!(i))?;
                 }
                 write!(f, "]")
             }
@@ -373,16 +345,16 @@ impl std::fmt::Debug for Value {
             } => {
                 write!(
                     f,
-                    "FubarPointer {{ name: {name}, frame_size: {frame_size}, captures: ["
+                    "LambdaPointer {{ name: {name}, frame_size: {frame_size}, captures: ["
                 )?;
                 for i in captures {
-                    let i = s_read!(i);
+                    let i = ref_read!(i);
                     write!(f, "{i}, ")?;
                 }
                 write!(f, "] }}")
             }
             Self::List { ty: _, inner } => {
-                let inner = s_read!(inner);
+                let inner = ref_read!(inner);
                 let mut first_time = true;
                 write!(f, "[")?;
                 for i in &*inner {
@@ -392,7 +364,7 @@ impl std::fmt::Debug for Value {
                         write!(f, ", ")?;
                     }
 
-                    write!(f, "{}", s_read!(i))?;
+                    write!(f, "{}", ref_read!(i))?;
                 }
                 write!(f, "]")
             }
@@ -403,14 +375,14 @@ impl std::fmt::Debug for Value {
             } => {
                 write!(f, "{{")?;
                 let mut first_time = true;
-                for (key, value) in &*s_read!(inner) {
+                for (key, value) in &*ref_read!(inner) {
                     if first_time {
                         first_time = false;
                     } else {
                         write!(f, ", ")?;
                     }
 
-                    write!(f, "{key:?}: {value:?}", key = key, value = s_read!(value))?;
+                    write!(f, "{key:?}: {value:?}", key = key, value = ref_read!(value))?;
                 }
                 write!(f, "}}")
             }
@@ -490,7 +462,7 @@ impl fmt::Display for Value {
         match self {
             Self::AnyList(list) => {
                 write!(f, "[")?;
-                let list = s_read!(list);
+                let list = ref_read!(list);
                 let mut first_time = true;
                 for i in &*list {
                     if first_time {
@@ -522,7 +494,7 @@ impl fmt::Display for Value {
             } => {
                 write!(
                     f,
-                    "FubarPointer {{ name: {name}, frame_size: {frame_size}, captures: ["
+                    "LambdaPointer {{ name: {name}, frame_size: {frame_size}, captures: ["
                 )?;
                 let mut first_time = true;
                 for i in captures {
@@ -540,8 +512,8 @@ impl fmt::Display for Value {
                 }
                 write!(f, "] }}")
             }
-            Self::List { ty: _, inner } => {
-                let inner = s_read!(inner);
+            Self::List { inner, .. } => {
+                let inner = ref_read!(inner);
                 let mut first_time = true;
                 write!(f, "[")?;
                 for i in &*inner {
@@ -560,14 +532,10 @@ impl fmt::Display for Value {
                 }
                 write!(f, "]")
             }
-            Self::Map {
-                // key_ty: _,
-                // value_ty: _,
-                inner,
-            } => {
+            Self::Map { inner } => {
                 write!(f, "{{")?;
                 let mut first_time = true;
-                for (key, value) in &*s_read!(inner) {
+                for (key, value) in &*ref_read!(inner) {
                     if first_time {
                         first_time = false;
                     } else {
@@ -688,11 +656,9 @@ impl From<Vec<RefType<Value>>> for Value {
 impl TryFrom<&Value> for HashMap<String, RefType<Value>> {
     type Error = Error;
 
-    fn try_from(
-        value: &Value,
-    ) -> Result<Self, <HashMap<String, RefType<Value>> as TryFrom<&Value>>::Error> {
+    fn try_from(value: &Value) -> Result<Self, <Self as TryFrom<&Value>>::Error> {
         match value {
-            Value::Map { inner, .. } => Ok(s_read!(inner).clone()),
+            Value::Map { inner, .. } => Ok(ref_read!(inner).clone()),
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "HashMap<String, RefType<Value>>".to_owned(),
@@ -709,7 +675,7 @@ impl TryFrom<&Value> for Vec<RefType<Value>> {
 
     fn try_from(value: &Value) -> Result<Self, <Vec<RefType<Value>> as TryFrom<&Value>>::Error> {
         match value {
-            Value::List { ty: _, inner } => Ok(s_read!(inner).clone()),
+            Value::List { ty: _, inner } => Ok(ref_read!(inner).clone()),
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "Vec<RefType<Value>>".to_owned(),
@@ -1467,15 +1433,15 @@ impl std::cmp::PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Value::AnyList(a), Value::AnyList(b)) => {
-                let a = s_read!(a);
-                let b = s_read!(b);
+                let a = ref_read!(a);
+                let b = ref_read!(b);
 
                 if a.len() != b.len() {
                     return false;
                 }
 
                 for (i, v) in a.iter().enumerate() {
-                    if !s_read!(v).eq(&s_read!(b[i])) {
+                    if !ref_read!(v).eq(&ref_read!(b[i])) {
                         return false;
                     }
                 }
@@ -1492,19 +1458,22 @@ impl std::cmp::PartialEq for Value {
             (Value::Integer(a), Value::Integer(b)) => a == b,
             (Value::Integer(a), Value::Float(b)) => (*a as DwarfFloat) == *b,
             (Value::List { ty: ty_a, inner: a }, Value::List { ty: ty_b, inner: b }) => {
-                if *s_read!(ty_a) != *s_read!(ty_b) {
+                // Compare the types
+                if ref_read!(ty_a).subtype != ref_read!(ty_b).subtype {
                     return false;
                 }
 
-                let a = s_read!(a);
-                let b = s_read!(b);
+                let a = ref_read!(a);
+                let b = ref_read!(b);
 
+                // Compare the lengths
                 if a.len() != b.len() {
                     return false;
                 }
 
+                // Compare the values
                 for (i, v) in a.iter().enumerate() {
-                    if !s_read!(v).eq(&s_read!(b[i])) {
+                    if !ref_read!(v).eq(&ref_read!(b[i])) {
                         return false;
                     }
                 }
@@ -1512,15 +1481,15 @@ impl std::cmp::PartialEq for Value {
                 true
             }
             (Value::Map { inner: a }, Value::Map { inner: b }) => {
-                let a = s_read!(a);
-                let b = s_read!(b);
+                let a = ref_read!(a);
+                let b = ref_read!(b);
 
                 if a.len() != b.len() {
                     return false;
                 }
 
                 for (k, v) in a.iter() {
-                    if !s_read!(v).eq(&s_read!(b[k])) {
+                    if !ref_read!(v).eq(&ref_read!(b[k])) {
                         return false;
                     }
                 }

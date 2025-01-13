@@ -16,7 +16,7 @@ use crate::{
         store::ObjectStore as LuDogStore, Field, Item as WoogItem, Span as LuDogSpan,
         StructGeneric, ValueType, WoogStruct, XPlugin, ZObjectStore,
     },
-    s_read, s_write, Desanitize, Dirty, RefType, SarzakStorePtr,
+    s_read, s_write, Desanitize, Dirty, DwarfInteger, RefType, SarzakStorePtr,
 };
 
 macro_rules! link_struct_generic {
@@ -37,7 +37,7 @@ pub fn inter_struct(
     span: &Span,
     attributes: &AttributeMap,
     fields: &[(Spanned<String>, Spanned<Type>, AttributeMap)],
-    generics: Option<&HashMap<String, Type>>,
+    generics: Option<&Vec<(String, Type)>>,
     context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
@@ -55,7 +55,6 @@ pub fn inter_struct(
             location: location!(),
         }]);
     }
-    context.types.insert(name.to_owned());
 
     let name = context.path.clone() + name;
 
@@ -125,6 +124,10 @@ pub fn inter_struct(
                                             "Object `{}` not found in store",
                                             proxy_obj
                                         ),
+                                        location: location!(),
+                                        span: span.clone(),
+                                        file: context.file_name.to_owned(),
+                                        program: context.source_string.to_owned(),
                                     }])
                                 }
                             } else {
@@ -133,6 +136,10 @@ pub fn inter_struct(
                                         "Model `{}` not found in store",
                                         store_name
                                     ),
+                                    location: location!(),
+                                    span: span.clone(),
+                                    file: context.file_name.to_owned(),
+                                    program: context.source_string.to_owned(),
                                 }])
                             }
                         } else {
@@ -141,6 +148,10 @@ pub fn inter_struct(
                     } else {
                         Err(vec![DwarfError::Generic {
                             description: "No object specified".to_owned(),
+                            location: location!(),
+                            span: span.clone(),
+                            file: context.file_name.to_owned(),
+                            program: context.source_string.to_owned(),
                         }])
                     }
                 } else {
@@ -155,6 +166,10 @@ pub fn inter_struct(
             } else {
                 Err(vec![DwarfError::Generic {
                     description: "No store specified".to_owned(),
+                    location: location!(),
+                    span: span.clone(),
+                    file: context.file_name.to_owned(),
+                    program: context.source_string.to_owned(),
                 }])
             }
         } else {
@@ -182,12 +197,20 @@ pub fn inter_struct(
                         .map_err(|e| {
                             vec![DwarfError::Generic {
                                 description: e.to_string(),
+                                location: location!(),
+                                span: span.clone(),
+                                file: context.file_name.to_owned(),
+                                program: context.source_string.to_owned(),
                             }]
                         })?
                         .build_v2()
                         .map_err(|e| {
                             vec![DwarfError::Generic {
                                 description: e.to_string(),
+                                location: location!(),
+                                span: span.clone(),
+                                file: context.file_name.to_owned(),
+                                program: context.source_string.to_owned(),
                             }]
                         })?;
 
@@ -204,6 +227,42 @@ pub fn inter_struct(
                         WoogStruct::new(name.to_owned(), context.path.clone(), None, None, lu_dog);
                     context.dirty.push(Dirty::Struct(woog_struct.clone()));
                     let _ = WoogItem::new_woog_struct(&context.source, &woog_struct, lu_dog);
+                    let woog_struct_value_type =
+                        ValueType::new_woog_struct(true, &woog_struct, lu_dog);
+                    let _ = LuDogSpan::new(
+                        span.end as DwarfInteger,
+                        span.start as DwarfInteger,
+                        &context.source,
+                        Some(&woog_struct_value_type),
+                        None,
+                        lu_dog,
+                    );
+
+                    let mut first = true;
+                    let mut first_generic = None;
+                    let mut last_generic_uuid: Option<SarzakStorePtr> = None;
+                    if let Some(generics) = generics {
+                        for generic in generics.iter() {
+                            let name = &generic.0;
+                            let generic =
+                                StructGeneric::new(name.to_owned(), None, &woog_struct, lu_dog);
+                            if first {
+                                first = false;
+                                first_generic = Some(s_read!(generic).id);
+                            }
+                            last_generic_uuid =
+                                link_struct_generic!(last_generic_uuid, generic, lu_dog);
+                        }
+
+                        s_write!(woog_struct).first_generic = first_generic;
+                    }
+
+                    context.struct_fields.push(StructFields {
+                        woog_struct,
+                        fields: fields.to_owned(),
+                        generics: generics.cloned(),
+                        location: location!(),
+                    });
 
                     Ok(())
                 } else {
@@ -212,25 +271,36 @@ pub fn inter_struct(
             } else {
                 Err(vec![DwarfError::Generic {
                     description: "No model specified".to_owned(),
+                    location: location!(),
+                    span: span.clone(),
+                    file: context.file_name.to_owned(),
+                    program: context.source_string.to_owned(),
                 }])
             }
         } else {
             unreachable!();
         }
     } else {
-        debug!("created struct {name}");
-
         let woog_struct =
             WoogStruct::new(name.to_owned(), context.path.clone(), None, None, lu_dog);
         context.dirty.push(Dirty::Struct(woog_struct.clone()));
-        let _ = ValueType::new_woog_struct(true, &woog_struct, lu_dog);
+        let woog_struct_value_type = ValueType::new_woog_struct(true, &woog_struct, lu_dog);
+        let _ = LuDogSpan::new(
+            span.end as DwarfInteger,
+            span.start as DwarfInteger,
+            &context.source,
+            Some(&woog_struct_value_type),
+            None,
+            lu_dog,
+        );
 
         let mut first = true;
         let mut first_generic = None;
         let mut last_generic_uuid: Option<SarzakStorePtr> = None;
         if let Some(generics) = generics {
-            for generic in generics.keys() {
-                let generic = StructGeneric::new(generic.to_owned(), None, &woog_struct, lu_dog);
+            for generic in generics.iter() {
+                let name = &generic.0;
+                let generic = StructGeneric::new(name.to_owned(), None, &woog_struct, lu_dog);
                 if first {
                     first = false;
                     first_generic = Some(s_read!(generic).id);
@@ -248,6 +318,8 @@ pub fn inter_struct(
             location: location!(),
         });
 
+        debug!("created struct {name}");
+
         Ok(())
     }
 }
@@ -255,7 +327,7 @@ pub fn inter_struct(
 pub fn inter_struct_fields(
     woog_struct: RefType<WoogStruct>,
     fields: &[(Spanned<String>, Spanned<Type>, AttributeMap)],
-    generics: Option<&HashMap<String, Type>>,
+    generics: Option<&Vec<(String, Type)>>,
     location: Location,
     context: &mut Context,
     import_stack: &mut Vec<String>,
@@ -275,8 +347,10 @@ pub fn inter_struct_fields(
                         if let Some((_, ref value)) = plugin_vec.first() {
                             let plugin_path: String = value.try_into().map_err(|e| vec![e])?;
                             debug!("proxy.plugin: {plugin_path}");
+
                             if let Type::UserType(tok, generics) = type_ {
                                 let plugin_ty = &generics.first().unwrap().0;
+
                                 if let Type::Generic((plugin_ty, _)) = plugin_ty {
                                     let ty_name = &tok.0;
                                     if ty_name == "Plugin" {
@@ -298,6 +372,10 @@ pub fn inter_struct_fields(
                                             description: format!(
                                                 "Expected `Plugin`, found `{ty_name}`.",
                                             ),
+                                            location: location!(),
+                                            span: span.clone(),
+                                            file: context.file_name.to_owned(),
+                                            program: context.source_string.to_owned(),
                                         }])
                                     }
                                 } else {
@@ -305,11 +383,19 @@ pub fn inter_struct_fields(
                                         description: format!(
                                             "Expected `Plugin` to have a generic argument.",
                                         ),
+                                        location: location!(),
+                                        span: span.clone(),
+                                        file: context.file_name.to_owned(),
+                                        program: context.source_string.to_owned(),
                                     }])
                                 }
                             } else {
                                 Err(vec![DwarfError::Generic {
                                     description: format!("Expected `Plugin`, found `{type_}`.",),
+                                    location: location!(),
+                                    span: span.clone(),
+                                    file: context.file_name.to_owned(),
+                                    program: context.source_string.to_owned(),
                                 }])
                             }
                         } else {
@@ -318,6 +404,10 @@ pub fn inter_struct_fields(
                     } else {
                         Err(vec![DwarfError::Generic {
                             description: "Expected `plugin` attribute".to_owned(),
+                            location: location!(),
+                            span: span.clone(),
+                            file: context.file_name.to_owned(),
+                            program: context.source_string.to_owned(),
                         }])
                     }
                 } else {
@@ -327,6 +417,7 @@ pub fn inter_struct_fields(
 
         let type_str = type_.to_string();
         let ty = if let Some(generics) = generics {
+            let generics: HashMap<&String, &Type> = generics.iter().map(|(k, v)| (k, v)).collect();
             if let Some(_definition_type) = generics.get(&type_str) {
                 // 🚧 kts -- this thing doesn't have it's next sorted, and that
                 // can't be right.

@@ -1,4 +1,0 @@
-fn main() {
-    chacha::assert_eq(42 / 1, 42);
-    chacha::assert_eq(42.0 / 1.0, 42.0);
-}

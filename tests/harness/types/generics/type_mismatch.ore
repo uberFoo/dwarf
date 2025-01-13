@@ -8,6 +8,6 @@ fn main() {
     let y = Foo::Baz(2);
     print(x);
     print(y);
-    print(chacha::typeof(x));
-    print(chacha::typeof(y))
+    print(chacha::type_of(x));
+    print(chacha::type_of(y))
 }

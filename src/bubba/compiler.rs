@@ -23,15 +23,14 @@ use crate::{
         value::Value,
         BOOL, CHAR, EMPTY, FLOAT, INTEGER, MAP, RANGE, STRING, STRING_ARRAY, UNKNOWN, UUID,
     },
-    keywords::{OPTION, OPTION_TYPE, RESULT, RESULT_TYPE},
+    keywords::{OPTION_TYPE, RESULT_TYPE},
     lu_dog::{
         BodyEnum, Expression, ExpressionEnum, Function, Map, ObjectStore as LuDogStore, Statement,
         StatementEnum, ValueType, ValueTypeEnum,
     },
     s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty},
-    Context as ExtruderContext, RefType, Span, BUILD_TIME, ERR_CLR, MERLIN, OTHER_CLR, POP_CLR,
-    SARZAK, VERSION,
+    Context as ExtruderContext, RefType, Span, BUILD_TIME, ERR_CLR, OTHER_CLR, POP_CLR, VERSION,
 };
 
 mod error;
@@ -331,8 +330,10 @@ impl<'a, 'b> Context<'a, 'b> {
     }
 }
 
-pub fn compile(context: &ExtruderContext) -> Result<Program> {
-    println!("Compiling");
+pub fn compile(context: &ExtruderContext, silent: bool) -> Result<Program> {
+    if !silent {
+        println!("Compiling");
+    }
 
     let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
     program.set_source(context.source());
@@ -564,8 +565,8 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
     let (name, incr_fs) = if ty_name.is_empty() {
         (func.name.clone(), false)
     } else {
-        // Here is where we look for actual user defined types, as
-        // in types that are defined in dwarf source.
+        // Here is where we look for actual user defined types, i.e., types
+        // that are defined as dwarf source code..
         let ty = if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(&ty_name) {
             let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
             let woog_struct = s_read!(woog_struct);
@@ -630,20 +631,27 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
         BodyEnum::ExternalImplementation(ref block_id) => {
             let external = lu_dog.exhume_external_implementation(block_id).unwrap();
             let external = s_read!(external);
-            let model_name = external.x_model.clone();
-            let model_name = if model_name == MERLIN {
-                SARZAK.to_owned()
-            } else {
-                model_name
-            };
-            let models = &context.extruder_context.models;
-            let model = models.get(&model_name).unwrap();
+            // let model_name = external.x_model.clone();
+            // let model_name = if model_name == MERLIN {
+            //     SARZAK.to_owned()
+            // } else {
+            //     model_name
+            // };
+            // let models = &context.extruder_context.models;
+            // let model = models.get(&model_name).unwrap();
             let func_name = external.function.clone();
 
             let object_name = &external.object;
             let object_name = object_name.to_upper_camel_case();
 
-            dbg!(model, func_name, object_name);
+            dbg!(func_name, object_name);
+            thonk.insert_instruction(
+                Instruction::Push("External Implementation Not Working".into()),
+                location!(),
+            );
+            thonk.insert_instruction(Instruction::Push((0..0).into()), location!());
+
+            thonk.insert_instruction(Instruction::HaltAndCatchFire, location!());
         }
     };
 
@@ -784,7 +792,6 @@ fn get_span(expression: &RefType<Expression>, lu_dog: &LuDogStore) -> Span {
         let read = s_read!(span);
         read.start as usize..read.end as usize
     } else {
-        dbg!(&expression, &value);
         0..0
     };
 
@@ -800,10 +807,9 @@ mod test {
     use test_log::test;
 
     use crate::{
-        bubba::{error::Error, VM},
-        dwarf::{new_lu_dog, parse_dwarf},
+        bubba::{error::Error, s_read as ref_read, RefType, VM},
+        dwarf::{error::DwarfErrorReporter, new_lu_dog, parse_dwarf},
         sarzak::MODEL as SARZAK_MODEL,
-        RefType,
     };
 
     pub(super) fn get_dwarf_home() -> PathBuf {
@@ -822,7 +828,7 @@ mod test {
 
     pub(super) fn run_vm(program: &Program) -> Result<RefType<Value>, Error> {
         #[cfg(feature = "async")]
-        let mut vm = VM::new(program, &[], &get_dwarf_home(), THREADS, false);
+        let mut vm = VM::new(program, &[], &get_dwarf_home(), THREADS, true);
         #[cfg(not(feature = "async"))]
         let mut vm = VM::new(program, &[], &get_dwarf_home());
         vm.invoke("main", &[])
@@ -860,17 +866,18 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
 
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 8);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(5));
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &Value::Integer(5));
     }
 
     #[test]
@@ -886,18 +893,22 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
 
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 2);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Boolean(true));
+        assert_eq!(
+            &*ref_read!(run_vm(&program).unwrap()),
+            &Value::Boolean(true)
+        );
     }
 
     #[test]
@@ -913,18 +924,22 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
 
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 2);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Boolean(false));
+        assert_eq!(
+            &*ref_read!(run_vm(&program).unwrap()),
+            &Value::Boolean(false)
+        );
     }
 
     #[test]
@@ -951,11 +966,12 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 2);
@@ -964,15 +980,16 @@ mod test {
 
         assert_eq!(program.get_thonk("fib").unwrap().instruction_card(), 30);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(55));
+        assert_eq!(&*ref_read!(run_vm(&program).unwrap()), &Value::Integer(55));
     }
 
     #[test]
-    fn use_std_option() {
+    fn use_std_option() -> Result<(), String> {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    use std::option::Option;
+
                    fn main() -> bool {
                        let foo = Option::Some(1);
                        chacha::assert(foo.is_some());
@@ -990,10 +1007,16 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
-        .unwrap();
-        let program = compile(&ctx).unwrap();
+        .map_err(|e| {
+            for e in e {
+                eprintln!("{}", DwarfErrorReporter(&e, true))
+            }
+            "Test failed."
+        })?;
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
         // assert_eq!(program.get_thonk_card(), 5);
 
@@ -1001,7 +1024,9 @@ mod test {
         let run = run_vm(&program);
         eprintln!("{:?}", run);
         assert!(run.is_ok());
-        assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
+        assert_eq!(&*ref_read!(run.unwrap()), &Value::Boolean(true));
+
+        Ok(())
     }
 
     #[test]
@@ -1020,18 +1045,19 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
-        assert_eq!(program.get_thonk_card(), 12);
+        assert_eq!(program.get_thonk_card(), 14);
 
         // assert_eq!(program.get_instruction_card(), 393);
         let run = run_vm(&program);
         eprintln!("{:?}", run);
         assert!(run.is_ok());
-        assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
+        assert_eq!(&*ref_read!(run.unwrap()), &Value::Boolean(true));
     }
 
     // #[test]
@@ -1117,10 +1143,11 @@ async fn main() -> Future<()> {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
         assert_eq!(program.get_thonk_card(), 13);
 
@@ -1158,10 +1185,11 @@ async fn main() -> Future<()> {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
         assert_eq!(program.get_thonk_card(), 2);
 
@@ -1169,7 +1197,7 @@ async fn main() -> Future<()> {
         assert_eq!(program.get_thonk("foo").unwrap().instruction_card(), 12);
         let run = run_vm(&program);
         assert!(run.is_ok());
-        assert_eq!(&*s_read!(run.unwrap()), &Value::Integer(6));
+        assert_eq!(&*ref_read!(run.unwrap()), &Value::Integer(6));
     }
 
     #[test]
@@ -1196,15 +1224,16 @@ async fn main() -> Future<()> {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
         assert_eq!(program.get_thonk_card(), 1);
 
         let run = run_vm(&program);
         assert!(run.is_ok());
-        assert_eq!(&*s_read!(run.unwrap()), &Value::Integer(0));
+        assert_eq!(&*ref_read!(run.unwrap()), &Value::Integer(0));
     }
 }

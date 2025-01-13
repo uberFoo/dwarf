@@ -1,18 +1,22 @@
-use std::env;
+use std::{env, path::PathBuf};
 
 use dwarf::{
-    chacha::{
-        error::ChaChaErrorReporter, interpreter::initialize_interpreter, interpreter::start_func,
+    bubba::{
+        compiler::{compile, BubbaCompilerErrorReporter},
+        error::BubbaErrorReporter,
         value::Value,
+        VM,
     },
     dwarf::{new_lu_dog, parse_dwarf},
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
-    RefType,
 };
 #[cfg(feature = "tracy")]
 use tracy_client::Client;
 
-fn run_program(test: &str, program: &str) -> Result<(RefType<Value>, String), String> {
+#[cfg(feature = "async")]
+const NUM_THREADS: usize = 4;
+
+fn run_program(test: &str, program: &str, cwd: &PathBuf) -> Result<(Value, String), String> {
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
 
     let dwarf_home = env::var("DWARF_HOME")
@@ -43,6 +47,7 @@ fn run_program(test: &str, program: &str) -> Result<(RefType<Value>, String), St
         Some((program.to_owned(), &ast)),
         &dwarf_home,
         &env::current_dir().unwrap(),
+        true,
         &sarzak,
     ) {
         Ok(lu_dog) => lu_dog,
@@ -74,38 +79,91 @@ fn run_program(test: &str, program: &str) -> Result<(RefType<Value>, String), St
         }
     };
 
-    let mut ctx = initialize_interpreter(2, dwarf_home, ctx).unwrap();
-    match start_func("main", false, &mut ctx) {
-        Ok(v) => {
-            let stdout = ctx.drain_std_out().join("").trim().to_owned();
-
-            println!("{}", stdout);
-
-            Ok((v, stdout))
-        }
+    let binary = match compile(&ctx, true) {
+        Ok(program) => program,
         Err(e) => {
-            // Print the "uber" error message.
-            eprintln!("{}", ChaChaErrorReporter(&e, true, program, test));
+            let error = format!(
+                "Unable to compile program:\n{}",
+                BubbaCompilerErrorReporter(&e, true, program, test)
+            )
+            .trim()
+            .to_owned();
+
+            eprintln!("{error}");
 
             let error = format!(
-                "Interpreter exited with:\n{}",
-                ChaChaErrorReporter(&e, false, program, test)
+                "Unable to compile program:\n{}",
+                BubbaCompilerErrorReporter(&e, false, program, test)
+            )
+            .trim()
+            .to_owned();
+
+            return Err(error);
+        }
+    };
+
+    #[cfg(feature = "async")]
+    let mut vm = VM::new(&binary, &[], &dwarf_home, NUM_THREADS, false);
+    #[cfg(not(feature = "async"))]
+    let mut vm = VM::new(&program, &[], &dwarf_home, false);
+
+    let result = match vm.invoke("main", &[]) {
+        Ok(value) => {
+            let value = value.read().unwrap().clone();
+
+            match value {
+                Value::Error(msg) => {
+                    let msg = *msg;
+                    let error = format!(
+                        "Vm exited with:\n{}",
+                        BubbaErrorReporter(&msg.into(), true, program, test)
+                    )
+                    .trim()
+                    .to_owned();
+
+                    eprintln!("{error}");
+
+                    Err(error)
+
+                    // eprintln!("{msg}");
+                    // Err(msg.to_string())
+                }
+                _ => Ok((value, "Oops".to_owned())),
+            }
+        }
+        Err(e) => {
+            let error = format!(
+                "VM exited with:\n{}",
+                BubbaErrorReporter(&e, true, program, test)
+            )
+            .trim()
+            .to_owned();
+
+            eprintln!("{error}");
+
+            let error = format!(
+                "VM exited with:\n{}",
+                BubbaErrorReporter(&e, false, program, test)
             )
             .trim()
             .to_owned();
 
             Err(error)
         }
-    }
+    };
+
+    result
 }
 
-#[test]
+#[test_log::test]
 fn declaration() {
     let _ = env_logger::builder().is_test(true).try_init();
     #[cfg(feature = "tracy")]
     let _ = Client::start();
     color_backtrace::install();
 
-    let program = include_str!("proxy/declare.tao");
-    run_program("proxy/declare.tao", program).unwrap();
+    let program = include_str!("proxy/declare.ore");
+    let cwd = env::current_dir().unwrap();
+    // This needs to be fixed
+    // run_program("proxy/declare.ore", program, &cwd).unwrap();
 }

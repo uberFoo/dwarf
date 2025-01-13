@@ -3,7 +3,6 @@ use std::{
     env,
     path::{Path, PathBuf},
     sync::Mutex,
-    thread,
 };
 
 #[cfg(feature = "async")]
@@ -17,19 +16,21 @@ use tracy_client::{non_continuous_frame, span, Client};
 
 use abi_stable::{
     library::{lib_header_from_path, LibrarySuffix, RawLibrary},
-    std_types::{RBox, RErr, ROk, ROption, RResult, Tuple2},
+    std_types::{RErr, ROk},
 };
 use ansi_term::Colour;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use once_cell::sync::OnceCell;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use snafu::{location, Location};
+use snafu::location;
+use threadpool::ThreadPool;
 
 use crate::{
     bubba::{
         error::{BubbaError, Error, Result},
+        new_ref, s_read as ref_read, s_write,
         value::Value,
-        STRING,
+        RefType, STRING,
     },
     chacha::{
         ffi_value::FfiValue,
@@ -37,11 +38,9 @@ use crate::{
     },
     keywords::{INVOKE_FUNC, INVOKE_FUNC_MUT, NONE, OPTION, OPTION_TYPE, RESULT_TYPE, SOME},
     lu_dog::{ValueType, ValueTypeEnum},
-    new_ref,
     plug_in::{Error as FfiError, LambdaCall, PluginModRef, PluginType},
-    s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty, MODEL as SARZAK_MODEL},
-    DwarfInteger, NewRef, RefType, Span, LAMBDA_FUNCS,
+    DwarfInteger, Span, LAMBDA_FUNCS,
 };
 
 use super::instr::{Instruction, Program};
@@ -50,6 +49,8 @@ use super::instr::{Instruction, Program};
 static mut EXECUTOR: OnceCell<Executor> = OnceCell::new();
 
 static mut WRITE_MUTEX: OnceCell<Mutex<()>> = OnceCell::new();
+
+const MAX_PRINT_LEN: usize = 80;
 
 #[derive(Debug)]
 enum StackValue {
@@ -69,7 +70,7 @@ impl StackValue {
     #[inline]
     fn into_value(self) -> Value {
         match self {
-            StackValue::Pointer(p) => s_read!(p).clone(),
+            StackValue::Pointer(p) => ref_read!(p).clone(),
             StackValue::Value(v) => v,
         }
     }
@@ -78,7 +79,9 @@ impl StackValue {
 impl PartialEq for StackValue {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (StackValue::Pointer(p1), StackValue::Pointer(p2)) => &*s_read!(p1) == &*s_read!(p2),
+            (StackValue::Pointer(p1), StackValue::Pointer(p2)) => {
+                &*ref_read!(p1) == &*ref_read!(p2)
+            }
             (StackValue::Value(v1), StackValue::Value(v2)) => v1 == v2,
             _ => false,
         }
@@ -97,7 +100,7 @@ impl Clone for StackValue {
 impl std::fmt::Display for StackValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            StackValue::Pointer(p) => write!(f, "{}", *s_read!(p)),
+            StackValue::Pointer(p) => write!(f, "{}", *ref_read!(p)),
             StackValue::Value(v) => write!(f, "{}", v),
         }
     }
@@ -129,6 +132,7 @@ pub struct VM {
     #[cfg(feature = "async")]
     thread_count: usize,
     backtrace: bool,
+    lambda_pool: ThreadPool,
     lambda_sender: Sender<LambdaCall>,
     lambda_receiver: Receiver<LambdaCall>,
     trace: bool,
@@ -171,8 +175,7 @@ impl VM {
     ) -> Self {
         #[cfg(feature = "tracy-client")]
         Client::start();
-        // println!("{}", program);
-        // dbg!(&program);
+
         let Some(Value::ValueType(str_ty)) = program.get_symbol(STRING) else {
             panic!("No STRING symbol found.")
         };
@@ -182,6 +185,8 @@ impl VM {
         }
 
         let backtrace = env::var("DWARF_BACKTRACE").is_ok();
+
+        let lambda_pool = ThreadPool::new(thread_count);
         let (lambda_sender, lambda_receiver) = unbounded();
 
         let mut vm = VM {
@@ -204,6 +209,7 @@ impl VM {
             #[cfg(feature = "async")]
             thread_count,
             backtrace,
+            lambda_pool,
             lambda_sender,
             lambda_receiver,
             trace,
@@ -252,17 +258,13 @@ impl VM {
             panic!("Missing symbols: {:?}", missing_symbols);
         }
 
-        // 🚧 This is such an ugly hack. There should probably be a thread pool.
-        // OTOH, if this is sufficient...
-        let mut vm_clone = vm.clone();
-        thread::spawn(move || loop {
-            vm_clone.lambda_listen();
-        });
-
-        let mut vm_clone = vm.clone();
-        thread::spawn(move || loop {
-            vm_clone.lambda_listen();
-        });
+        // We start threads to handle lambda calls.
+        for _ in 0..thread_count {
+            let mut vm_clone = vm.clone();
+            vm.lambda_pool.execute(move || loop {
+                vm_clone.lambda_listen();
+            });
+        }
 
         vm
     }
@@ -290,7 +292,7 @@ impl VM {
             let result = self.invoke_lambda(&λ, &args);
 
             let result = match result {
-                Ok(value) => ROk(<Value as Into<FfiValue>>::into(s_read!(value).clone())),
+                Ok(value) => ROk(<Value as Into<FfiValue>>::into(ref_read!(value).clone())),
                 Err(e) => RErr(FfiError::Plugin(e.to_string().into())),
             };
             lambda_call.result.send(result).unwrap();
@@ -308,10 +310,12 @@ impl VM {
         stack.push(Value::Integer(0).into());
         stack.push(Value::Integer(0).into());
         stack.push(Value::Integer(0).into());
+
         // This is really lame. The call code expects stack_len - 2 - arity to be
-        // an address (an integer) ar it doesn't do anything with it. In any case
+        // an address (an integer) and it doesn't do anything with it. In any case
         // it needs to be here. So this is junk.
         stack.push(Value::Empty.into());
+
         // The next parameter is the number of locals on the stack -or- a LambdaPointer.
         stack.push(lambda.to_owned().into());
 
@@ -344,50 +348,58 @@ impl VM {
     }
 
     pub fn invoke(&mut self, func_name: &str, args: &[RefType<Value>]) -> Result<RefType<Value>> {
-        let (ip, frame_size) = self.func_map.get(func_name).unwrap();
-        let frame_size = *frame_size;
+        if let Some((ip, frame_size)) = self.func_map.get(func_name) {
+            let frame_size = *frame_size;
 
-        let mut stack = Vec::new();
+            let mut stack = Vec::new();
 
-        // Address of the function to invoke.
-        stack.push(Value::Integer(*ip as DwarfInteger).into());
-        // Number of parameters and locals in the function.
-        stack.push(Value::Integer(frame_size as DwarfInteger).into());
+            // Address of the function to invoke.
+            stack.push(Value::Integer(*ip as DwarfInteger).into());
+            // Number of parameters and locals in the function.
+            stack.push(Value::Integer(frame_size as DwarfInteger).into());
 
-        for arg in args.iter() {
-            stack.push(arg.clone().into());
-        }
-        for _ in 0..frame_size - args.len() {
+            for arg in args.iter() {
+                stack.push(arg.clone().into());
+            }
+            for _ in 0..frame_size - args.len() {
+                stack.push(Value::Empty.into());
+            }
+
+            // Arity
+            stack.push(StackValue::Value(
+                Value::Integer(args.len() as DwarfInteger),
+            ));
+            // Frame size
+            stack.push(StackValue::Value(Value::Integer(
+                (frame_size + 2) as DwarfInteger,
+            )));
+            // This is the IP sentinel value.
             stack.push(Value::Empty.into());
+            // Setup the frame pointer and it's sentinel.
+            stack.push(Value::Empty.into());
+
+            let fp = frame_size + 5;
+            let ip = *ip as isize;
+
+            let result = self.inner_run(
+                func_name,
+                ip,
+                fp,
+                stack,
+                args.len(),
+                frame_size,
+                self.program.clone(),
+            );
+
+            result
+        } else {
+            Err(BubbaError::VmPanic {
+                message: format!("No such function: `{}`", func_name.to_owned()),
+                program: self.program.clone(),
+                location: location!(),
+            }
+            .into())
         }
-
-        // Arity
-        stack.push(StackValue::Value(
-            Value::Integer(args.len() as DwarfInteger),
-        ));
-        // Frame size
-        stack.push(StackValue::Value(Value::Integer(
-            (frame_size + 2) as DwarfInteger,
-        )));
-        // This is the IP sentinel value.
-        stack.push(Value::Empty.into());
-        // Setup the frame pointer and it's sentinel.
-        stack.push(Value::Empty.into());
-
-        let fp = frame_size + 5;
-        let ip = *ip as isize;
-
-        let result = self.inner_run(
-            func_name,
-            ip,
-            fp,
-            stack,
-            args.len(),
-            frame_size,
-            self.program.clone(),
-        );
-
-        result
     }
 
     fn inner_run(
@@ -413,8 +425,6 @@ impl VM {
             }
 
             if self.trace {
-                // let mutex = WRITE_MUTEX.get_or_init(|| Mutex::new(()));
-                // let guard = mutex.lock().unwrap();
                 let mutex = match unsafe { WRITE_MUTEX.get() } {
                     Some(mutex) => mutex,
                     None => {
@@ -426,9 +436,10 @@ impl VM {
                     }
                 };
                 let _guard = mutex.lock().unwrap();
+
                 print_stack(&stack, fp);
                 println!("\t{} ->\t{cx}", Colour::Green.bold().paint("cx"));
-                println!("{}: {name}", Colour::Green.bold().paint("Thread"));
+                println!("{}: {name}", Colour::Green.bold().paint("Task"));
                 print_instrs(ip, &program, &self.instrs, &self.source_map);
                 println!();
             }
@@ -461,9 +472,12 @@ impl VM {
                         #[cfg(feature = "tracy-client")]
                         let _span = span!("AsyncCall");
 
+                        // This is the only difference between this and AsyncSpawn below.
+                        // The only difference is that we don't capture the environment.
+                        // Isn't that odd?
                         self.captures = None;
 
-                        self.start_task(&mut stack, *func_arity, arity, &program)?;
+                        self.start_task(true, &mut stack, *func_arity, arity, &program)?;
 
                         1
                     }
@@ -472,7 +486,7 @@ impl VM {
                         #[cfg(feature = "tracy-client")]
                         let _span = span!("AsyncSpawn");
 
-                        self.start_task(&mut stack, *func_arity, arity, &program)?;
+                        self.start_task(true, &mut stack, *func_arity, arity, &program)?;
 
                         1
                     }
@@ -481,8 +495,8 @@ impl VM {
                         #[cfg(feature = "tracy-client")]
                         let _span = span!("Await");
 
-                        let future = stack.pop().unwrap().into_pointer();
-                        let mut expression = &mut *s_write!(future);
+                        let task = stack.pop().unwrap().into_pointer();
+                        let mut expression = &mut *s_write!(task);
                         // dbg!(&expression);
 
                         let executor = match unsafe { EXECUTOR.get() } {
@@ -505,6 +519,7 @@ impl VM {
                                 if let Some(task) = s_write!(task).take() {
                                     if !*running {
                                         tracing::trace!(target: "vm", "Starting task: {name}");
+                                        *running = true;
                                         executor.start_task(&task);
                                     }
 
@@ -538,15 +553,15 @@ impl VM {
 
                             match method.as_str() {
                                 INVOKE_FUNC => {
-                                    let plugin = s_read!(plugin);
+                                    let plugin = ref_read!(plugin);
                                     let args = stack.pop().clone().unwrap().into_value();
                                     let Value::List { inner, .. } = args else {
                                         panic!("Expected a vector of arguments.")
                                     };
-                                    let args = s_read!(inner)
+                                    let args = ref_read!(inner)
                                         .iter()
                                         .map(|v| {
-                                            <Value as Into<FfiValue>>::into(s_read!(v).clone())
+                                            <Value as Into<FfiValue>>::into(ref_read!(v).clone())
                                         })
                                         .collect::<Vec<FfiValue>>();
                                     let func = stack.pop().clone().unwrap().into_value();
@@ -576,6 +591,7 @@ impl VM {
                                         RErr(e) => {
                                             return Err(BubbaError::VmPanic {
                                                 message: format!("Plugin error: {:?}\nAttempting to call {module}::{ty}::{func}", e),
+                                                program: self.program.clone(),
                                                 location: location!(),
                                             }
                                             .into())
@@ -588,10 +604,10 @@ impl VM {
                                     let Value::List { inner, .. } = args else {
                                         panic!("Expected a vector of arguments.")
                                     };
-                                    let args = s_read!(inner)
+                                    let args = ref_read!(inner)
                                         .iter()
                                         .map(|v| {
-                                            <Value as Into<FfiValue>>::into(s_read!(v).clone())
+                                            <Value as Into<FfiValue>>::into(ref_read!(v).clone())
                                         })
                                         .collect::<Vec<FfiValue>>();
                                     let func = stack.pop().clone().unwrap().into_value();
@@ -621,6 +637,7 @@ impl VM {
                                         RErr(e) => {
                                             return Err(BubbaError::VmPanic {
                                                 message: format!("Plugin error: {:?}\nAttempting to call {module}::{ty}::{func}", e),
+                                                program: self.program.clone(),
                                                 location: location!(),
                                             }
                                             .into())
@@ -630,6 +647,7 @@ impl VM {
                                 _ => {
                                     return Err(BubbaError::VmPanic {
                                         message: format!("Unknown method: {method}.",),
+                                        program: self.program.clone(),
                                         location: location!(),
                                     }
                                     .into())
@@ -672,6 +690,7 @@ impl VM {
                                         message: format!(
                                             "Unexpected value: {stack_local_count:?}.",
                                         ),
+                                        program: self.program.clone(),
                                         location: location!(),
                                     }
                                     .into())
@@ -704,7 +723,7 @@ impl VM {
                             // let result = self.inner_run(arity, local_count, trace)?;
 
                             // Move the frame pointer back
-                            // fp = (&*s_read!(stack[fp])).try_into().unwrap();
+                            // fp = (&*ref_read!(stack[fp])).try_into().unwrap();
                             // fp = old_fp;
                             // ip = old_ip;
 
@@ -727,82 +746,23 @@ impl VM {
                         // Maybe this could be configurable? Feature flag? Maybe
                         // even something at runtime, although we'd need to see
                         // how much that extra condition costs.
-                        // let value = s_read!(captures[*from]).clone();
+                        // let value = ref_read!(captures[*from]).clone();
                         let value = captures[*from].clone();
                         stack[fp - arity - local_count - 3 + to] = value.into();
 
                         1
                     }
                     Instruction::Comment(_) => 1,
-                    // Instruction::DeconstructStructExpression => {
-                    //     fn decode_expression(
-                    //         value: RefType<Value>,
-                    //     ) -> Result<(RefType<Value>, Option<RefType<Value>>)>
-                    //     {
-                    //         let read = s_read!(value);
-                    //         match &*read {
-                    //             Value::Enumeration(value) => match value {
-                    //                 // 🚧 I can't tell if this is gross, or a sweet hack.
-                    //                 // I think I'm referring to using the name as the scrutinee?
-                    //                 EnumVariant::Unit(_, ty, value) => Ok((
-                    //                     new_ref!(Value, Value::String(ty.to_owned())),
-                    //                     Some(new_ref!(Value, Value::String(value.to_owned()))),
-                    //                 )),
-                    //                 // EnumFieldVariant::Struct(value) => (
-                    //                 //     *value.type_name().to_owned(),
-                    //                 //     Some(*value.get_value()),
-                    //                 // ),
-                    //                 EnumVariant::Tuple((ty, path), value) => {
-                    //                     let path = path.split(PATH_SEP).collect::<Vec<&str>>();
-                    //                     let mut path = VecDeque::from(path);
-                    //                     let name = path.pop_front().unwrap().to_owned();
-                    //                     if name.is_empty() {
-                    //                         Ok((
-                    //                             new_ref!(
-                    //                                 Value,
-                    //                                 Value::String(
-                    //                                     s_read!(value).variant().to_owned()
-                    //                                 )
-                    //                             ),
-                    //                             Some(s_read!(value).value().clone()),
-                    //                         ))
-                    //                     } else {
-                    //                         Ok((
-                    //                             new_ref!(Value, Value::String(name)),
-                    //                             Some(new_ref!(
-                    //                                 Value,
-                    //                                 Value::Enumeration(EnumVariant::Tuple(
-                    //                                     (
-                    //                                         ty.clone(),
-                    //                                         path.into_iter()
-                    //                                             .collect::<Vec<&str>>()
-                    //                                             .join(PATH_SEP)
-                    //                                     ),
-                    //                                     value.clone(),
-                    //                                 ))
-                    //                             )),
-                    //                         ))
-                    //                     }
-                    //                 }
-                    //                 _ => unimplemented!(),
-                    //             },
-                    //             _ => Ok((value.clone(), None)),
-                    //         }
-                    //     }
+                    #[cfg(feature = "async")]
+                    Instruction::CreateTask(func_arity) => {
+                        #[cfg(feature = "tracy-client")]
+                        let _span = span!("CreateTask");
 
-                    //     let mut variant = stack.pop().unwrap();
-                    //     while let Ok((name, value)) = decode_expression(variant.into_pointer()) {
-                    //         dbg!(&name, &value);
-                    //         stack.push(name.into());
-                    //         if let Some(value) = value {
-                    //             variant = value.into();
-                    //         } else {
-                    //             break;
-                    //         }
-                    //     }
+                        // Create a task in the paused state.
+                        self.start_task(false, &mut stack, *func_arity, arity, &program)?;
 
-                    //     1
-                    // }
+                        1
+                    }
                     Instruction::Divide => {
                         let b = stack.pop().unwrap();
                         let a = stack.pop().unwrap();
@@ -832,6 +792,7 @@ impl VM {
                             }
                             return Err(BubbaError::VmPanic {
                                 message: format!("Expected enum, found: {user_enum:?}."),
+                                program: self.program.clone(),
                                 location: location!(),
                             }
                             .into());
@@ -842,7 +803,7 @@ impl VM {
                                 stack.push(Value::String(value.to_owned()).into());
                             }
                             Enum::Tuple(_, value) => {
-                                stack.push(s_read!(value).value().clone().into());
+                                stack.push(ref_read!(value).value().clone().into());
                             }
                             _ => unimplemented!(),
                         }
@@ -905,6 +866,7 @@ impl VM {
                                 return Err::<RefType<Value>, Error>(
                                     BubbaError::VmPanic {
                                         message: format!("FieldRead unexpected value: {value}."),
+                                        program: self.program.clone(),
                                         location: location!(),
                                     }
                                     .into(),
@@ -943,6 +905,7 @@ impl VM {
                                 return Err::<RefType<Value>, Error>(
                                     BubbaError::VmPanic {
                                         message: format!("Unexpected value. type: {value}."),
+                                        program: self.program.clone(),
                                         location: location!(),
                                     }
                                     .into(),
@@ -958,6 +921,7 @@ impl VM {
                         } else {
                             return Err(BubbaError::VmPanic {
                                 location: location!(),
+                                program: self.program.clone(),
                                 message: format!("Unknown label: {label}."),
                             }
                             .into());
@@ -1015,11 +979,11 @@ impl VM {
                         let index = stack.pop().unwrap().into_value();
                         let list = stack.pop().unwrap();
                         let list = list.into_pointer();
-                        let list = s_read!(list);
+                        let list = ref_read!(list);
                         let index: usize = index.try_into()?;
                         match &*list {
                             Value::AnyList(vec) => {
-                                let vec = s_read!(vec);
+                                let vec = ref_read!(vec);
                                 if index < vec.len() {
                                     stack.push(vec[index].clone().into());
                                 } else {
@@ -1038,7 +1002,7 @@ impl VM {
                                 }
                             }
                             Value::List { ty: _, inner: vec } => {
-                                let vec = s_read!(vec);
+                                let vec = ref_read!(vec);
                                 if index < vec.len() {
                                     stack.push(vec[index].clone().into());
                                 } else {
@@ -1095,11 +1059,11 @@ impl VM {
                         let end: usize = stack.pop().unwrap().into_value().try_into()?;
                         let list = stack.pop().unwrap();
                         let list = list.into_pointer();
-                        let list = s_read!(list);
+                        let list = ref_read!(list);
 
                         match &*list {
                             Value::List { ty, inner: vec } => {
-                                let vec = s_read!(vec);
+                                let vec = ref_read!(vec);
                                 if end < vec.len() {
                                     let list = new_ref!(
                                         Value,
@@ -1161,13 +1125,13 @@ impl VM {
                         let sep = stack.pop().unwrap();
                         let list = stack.pop().unwrap();
                         let list = list.into_pointer();
-                        let list = s_read!(list);
+                        let list = ref_read!(list);
                         match &*list {
                             Value::List { inner, .. } => {
-                                let inner = s_read!(inner);
+                                let inner = ref_read!(inner);
                                 let result = inner
                                     .iter()
-                                    .map(|v| s_read!(v).to_inner_string())
+                                    .map(|v| ref_read!(v).to_inner_string())
                                     .collect::<Vec<String>>()
                                     .join(sep.into_value().to_inner_string().as_str());
                                 stack.push(Value::String(result).into());
@@ -1180,18 +1144,18 @@ impl VM {
                     Instruction::ListLength => {
                         let list = stack.pop().unwrap();
                         let list = list.into_pointer();
-                        let list = s_read!(list);
+                        let list = ref_read!(list);
                         match &*list {
                             Value::AnyList(vec) => {
-                                let vec = s_read!(vec);
+                                let vec = ref_read!(vec);
                                 stack.push(Value::Integer(vec.len() as DwarfInteger).into());
                             }
                             Value::List { inner, .. } => {
-                                let inner = s_read!(inner);
+                                let inner = ref_read!(inner);
                                 stack.push(Value::Integer(inner.len() as DwarfInteger).into());
                             }
                             Value::Map { inner } => {
-                                let inner = s_read!(inner);
+                                let inner = ref_read!(inner);
                                 stack.push(Value::Integer(inner.len() as DwarfInteger).into());
                             }
                             Value::String(str) => {
@@ -1208,13 +1172,15 @@ impl VM {
 
                         let list = stack.pop().unwrap();
                         let list = list.into_pointer();
-                        let list = s_read!(list);
+                        let list = ref_read!(list);
                         match &*list {
                             Value::AnyList(vec) => {
-                                let vec = s_read!(vec);
+                                let vec = ref_read!(vec);
                                 let result = vec
                                     .iter()
-                                    .map(|v| self.invoke_lambda(&lambda, &vec![s_read!(v).clone()]))
+                                    .map(|v| {
+                                        self.invoke_lambda(&lambda, &vec![ref_read!(v).clone()])
+                                    })
                                     .collect::<Result<Vec<RefType<Value>>>>()?;
                                 let result = new_ref!(
                                     Value,
@@ -1222,11 +1188,13 @@ impl VM {
                                 );
                                 stack.push(result.into());
                             }
-                            Value::List { inner, ty } => {
-                                let inner = s_read!(inner);
+                            Value::List { ty, inner } => {
+                                let inner = ref_read!(inner);
                                 let result = inner
                                     .iter()
-                                    .map(|v| self.invoke_lambda(&lambda, &vec![s_read!(v).clone()]))
+                                    .map(|v| {
+                                        self.invoke_lambda(&lambda, &vec![ref_read!(v).clone()])
+                                    })
                                     .collect::<Result<Vec<RefType<Value>>>>()?;
                                 stack.push(
                                     Value::List {
@@ -1245,7 +1213,7 @@ impl VM {
                         let element = stack.pop().unwrap();
                         let list = stack.pop().unwrap();
                         let list = list.into_pointer();
-                        match &*s_read!(list) {
+                        match &*ref_read!(list) {
                             Value::List { inner, .. } => {
                                 let mut inner = s_write!(inner);
                                 inner.push(element.into_pointer());
@@ -1285,10 +1253,10 @@ impl VM {
 
                         let map = stack.pop().unwrap();
                         let map = map.into_pointer();
-                        let map = s_read!(map);
+                        let map = ref_read!(map);
                         match &*map {
                             Value::Map { inner, .. } => {
-                                let inner = s_read!(inner);
+                                let inner = ref_read!(inner);
                                 let ty = program.get_symbol(OPTION_TYPE).expect(
                                     "The {OPTION_TYPE} symbol is missing from the program.",
                                 );
@@ -1349,10 +1317,10 @@ impl VM {
                     Instruction::MapLength => {
                         let map = stack.pop().unwrap();
                         let map = map.into_pointer();
-                        let map = s_read!(map);
+                        let map = ref_read!(map);
                         match &*map {
                             Value::Map { inner, .. } => {
-                                let inner = s_read!(inner);
+                                let inner = ref_read!(inner);
                                 stack.push(Value::Integer(inner.len() as DwarfInteger).into());
                             }
                             _ => panic!("Expected a map."),
@@ -1371,7 +1339,7 @@ impl VM {
                             let ty = match ty.into_value() {
                                 Value::Enumeration(variant) => match variant {
                                     Enum::Struct(ty) => {
-                                        let ty = s_read!(ty);
+                                        let ty = ref_read!(ty);
                                         let name = ty.type_name();
                                         name.to_owned()
                                     }
@@ -1401,6 +1369,7 @@ impl VM {
                             } else {
                                 return Err(BubbaError::VmPanic {
                                     message: format!("Missing function definition: {func}"),
+                                    program: self.program.clone(),
                                     location: location!(),
                                 }
                                 .into());
@@ -1415,6 +1384,7 @@ impl VM {
                         let Value::Integer(value) = value else {
                             return Err(BubbaError::VmPanic {
                                 message: format!("Expected integer, found: {value:?}."),
+                                program: self.program.clone(),
                                 location: location!(),
                             }
                             .into());
@@ -1569,6 +1539,7 @@ impl VM {
                                 return Err::<RefType<Value>, Error>(
                                     BubbaError::VmPanic {
                                         message: format!("Unknown stream: {stream}."),
+                                        program: self.program.clone(),
                                         location: location!(),
                                     }
                                     .into(),
@@ -1609,6 +1580,7 @@ impl VM {
                             }
                             BubbaError::VmPanic {
                                 message: format!("Plug-in error: {e}."),
+                                program: self.program.clone(),
                                 location: location!(),
                             }
                         })?;
@@ -1661,6 +1633,7 @@ impl VM {
                                         "Expected an integer, but got: {:?}.",
                                         stack.pop().unwrap()
                                     ),
+                                    program: self.program.clone(),
                                     location: location!(),
                                 }
                                 .into());
@@ -1754,6 +1727,7 @@ impl VM {
                         let Value::String(string) = string else {
                             return Err(BubbaError::VmPanic {
                                 message: format!("Expected a string, but got: {string:?}."),
+                                program: self.program.clone(),
                                 location: location!(),
                             }
                             .into());
@@ -1776,6 +1750,7 @@ impl VM {
                         let Value::String(replace) = replace else {
                             return Err(BubbaError::VmPanic {
                                 message: format!("Expected a string, but got: {replace:?}."),
+                                program: self.program.clone(),
                                 location: location!(),
                             }
                             .into());
@@ -1783,6 +1758,7 @@ impl VM {
                         let Value::String(needle) = needle else {
                             return Err(BubbaError::VmPanic {
                                 message: format!("Expected a string, but got: {needle:?}."),
+                                program: self.program.clone(),
                                 location: location!(),
                             }
                             .into());
@@ -1790,6 +1766,7 @@ impl VM {
                         let Value::String(haystack) = haystack else {
                             return Err(BubbaError::VmPanic {
                                 message: format!("Expected a string, but got: {haystack:?}."),
+                                program: self.program.clone(),
                                 location: location!(),
                             }
                             .into());
@@ -1865,12 +1842,13 @@ impl VM {
                         1
                     }
                     Instruction::TypeCast(as_ty) => {
-                        let Value::ValueType(as_ty) = &*s_read!(as_ty) else {
+                        let Value::ValueType(as_ty) = &*ref_read!(as_ty) else {
                             return Err(BubbaError::VmPanic {
                                 message: format!(
                                     "Expected a ValueType, but got: {as_ty:?}.",
                                     as_ty = *as_ty
                                 ),
+                                program: self.program.clone(),
                                 location: location!(),
                             }
                             .into());
@@ -1878,7 +1856,7 @@ impl VM {
 
                         let lhs = stack.pop().unwrap();
                         let lhs = lhs.into_pointer();
-                        let lhs = s_read!(lhs);
+                        let lhs = ref_read!(lhs);
 
                         let value = match &as_ty.subtype {
                             ValueTypeEnum::List(_) => {
@@ -1911,6 +1889,7 @@ impl VM {
                                     ref alpha => {
                                         return Err(BubbaError::VmPanic {
                                             message: format!("Unexpected type: {alpha:?}.",),
+                                            program: self.program.clone(),
                                             location: location!(),
                                         }
                                         .into())
@@ -1921,6 +1900,7 @@ impl VM {
                             ty => {
                                 return Err(BubbaError::VmPanic {
                                     message: format!("Unexpected type: {ty:?}.",),
+                                    program: self.program.clone(),
                                     location: location!(),
                                 }
                                 .into())
@@ -1949,6 +1929,7 @@ impl VM {
     #[cfg(feature = "async")]
     fn start_task(
         &mut self,
+        running: bool,
         mut stack: &mut Vec<StackValue>,
         func_arity: usize,
         arity: usize,
@@ -1956,7 +1937,7 @@ impl VM {
     ) -> Result<()> {
         use puteketeke::AsyncTask;
 
-        use crate::VmValueResult;
+        use crate::bubba::value::ValueResult;
 
         let callee = &stack[stack.len() - func_arity - 2].clone();
         let stack_local_count = &stack[stack.len() - func_arity - 1].clone();
@@ -1999,6 +1980,7 @@ impl VM {
             _ => {
                 return Err(BubbaError::VmPanic {
                     message: format!("Unexpected value: {stack_local_count:?}.",),
+                    program: self.program.clone(),
                     location: location!(),
                 }
                 .into())
@@ -2059,105 +2041,29 @@ impl VM {
                 }
             }
         };
-        let worker = executor.new_worker();
-        let child_task = worker.spawn_task(future).unwrap();
-        executor.start_task(&child_task);
 
-        tracing::trace!(target: "vm", "Task started: {name} {child_task:?}.");
+        let worker = executor.new_worker();
+        let child_task = worker.create_task(future).unwrap();
+
+        tracing::trace!(target: "vm", "Task created: {name} {child_task:?}.");
+
+        if running {
+            executor.start_task(&child_task);
+            tracing::trace!(target: "vm", "Task started: {name} {child_task:?}.");
+        }
 
         let value = new_ref!(
             Value,
             Value::Task {
                 name,
-                running: true,
-                task: new_ref!(Option<AsyncTask<'static, VmValueResult>>, Some(child_task))
+                running,
+                task: new_ref!(Option<AsyncTask<'static, ValueResult>>, Some(child_task))
             }
         );
 
         old_stack.push(value.into());
 
         Ok(())
-    }
-}
-
-// I think that this is here for the benefit of the Result type.
-impl From<(FfiValue, &Value)> for Value {
-    fn from((ffi_value, ty): (FfiValue, &Value)) -> Self {
-        match ffi_value {
-            FfiValue::Boolean(bool_) => Self::Boolean(bool_),
-            FfiValue::Empty => Self::Empty,
-            // FfiValue::Error(e) => Self::Error(e.into()),
-            FfiValue::Float(num) => Self::Float(num),
-            FfiValue::Integer(num) => Self::Integer(num),
-            FfiValue::List(list) => {
-                let Value::ValueType(ty) = ty else {
-                    unreachable!()
-                };
-                let ty = ty.clone();
-                let vec: Vec<_> = list
-                    .into_iter()
-                    .map(|v| new_ref!(Value, v.into()))
-                    .collect();
-                let list = std::sync::Arc::new(std::sync::RwLock::new(vec));
-                Self::List {
-                    ty: new_ref!(ValueType, ty),
-                    inner: list,
-                }
-            }
-            FfiValue::Map(map) => {
-                let map: StdHashMap<String, _> = map
-                    .0
-                    .into_iter()
-                    .map(|Tuple2(k, v)| (k.into(), new_ref!(Value, v.into())))
-                    .collect();
-                let map = std::sync::Arc::new(std::sync::RwLock::new(map));
-                Self::Map { inner: map }
-            }
-            FfiValue::Option(option) => match option {
-                ROption::RNone => Self::Empty,
-                ROption::RSome(value) => {
-                    <(FfiValue, &Value) as Into<Value>>::into((RBox::into_inner(value), ty))
-                }
-            },
-            // FfiValue::ProxyType(plugin) => Self::ProxyType {
-            //     module: plugin.module.into(),
-            //     obj_ty: plugin.ty.into(),
-            //     id: plugin.id.into(),
-            //     plugin: new_ref!(PluginType, plugin.plugin),
-            // },
-            FfiValue::Range(range) => Self::Range(range.start..range.end),
-            FfiValue::Result(result) => {
-                let tuple = match result {
-                    RResult::RErr(err) => TupleEnum {
-                        variant: "Err".to_owned(),
-                        value: new_ref!(
-                            Value,
-                            <(FfiValue, &Value) as Into<Value>>::into((RBox::into_inner(err), ty))
-                        ),
-                    },
-                    RResult::ROk(ok) => TupleEnum {
-                        variant: "Ok".to_owned(),
-                        value: new_ref!(
-                            Value,
-                            <(FfiValue, &Value) as Into<Value>>::into((RBox::into_inner(ok), ty))
-                        ),
-                    },
-                };
-
-                let Value::ValueType(ty) = ty else {
-                    unreachable!()
-                };
-
-                Value::Enumeration(Enum::Tuple(
-                    (new_ref!(ValueType, ty.to_owned()), "Result".to_owned()),
-                    new_ref!(TupleEnum<Value>, tuple),
-                ))
-            }
-            FfiValue::String(str_) => Self::String(str_.into()),
-            FfiValue::Struct(struct_) => Self::Struct(struct_.into()),
-            FfiValue::Uuid(uuid) => Self::Uuid(uuid.into()),
-            _ => panic!("Unexpected FfiValue: {ffi_value:?}."),
-        }
     }
 }
 
@@ -2168,7 +2074,13 @@ fn print_stack(stack: &[StackValue], fp: usize) {
         } else {
             eprint!("\t     \t");
         }
-        eprintln!("stack {i}:\t{}", entry);
+        let string = format!("{entry}");
+        let snip = string.chars().take(MAX_PRINT_LEN).collect::<String>();
+        if string.len() > MAX_PRINT_LEN {
+            eprintln!("stack {i}:\t{snip}...");
+        } else {
+            eprintln!("stack {i}:\t{snip}");
+        }
     }
 }
 
@@ -2213,11 +2125,7 @@ mod tests {
     use tracy_client::Client;
 
     use crate::{
-        bubba::instr::Thonk,
-        dwarf::{DwarfFloat, DwarfInteger},
-        interpreter::{initialize_interpreter, PrintableValueType},
-        lu_dog::ObjectStore as LuDogStore,
-        Context,
+        bubba::instr::Thonk, dwarf::DwarfInteger, lu_dog::ObjectStore as LuDogStore, s_read,
     };
 
     use super::*;
@@ -2230,6 +2138,7 @@ mod tests {
         let mut thonk = Thonk::new("test".to_string());
 
         thonk.add_instruction(Instruction::Push(42.into()), None);
+        thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
 
         let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
@@ -2249,7 +2158,7 @@ mod tests {
         println!("{:?}", result);
         println!("{:?}", vm);
 
-        assert!(result.is_err());
+        assert!(result.is_ok());
     }
 
     #[test]
@@ -2281,7 +2190,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let as_int: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
+        let as_int: DwarfInteger = (&*ref_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(as_int, 42);
 
         // let mut frame = vm.frames.pop();
@@ -2319,7 +2228,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let as_int: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
+        let as_int: DwarfInteger = (&*ref_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(as_int, 111);
 
         // let mut frame = vm.frames.pop();
@@ -2357,7 +2266,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let as_int: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
+        let as_int: DwarfInteger = (&*ref_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(as_int, 42);
 
         // assert_eq!(frame.ip, 4);
@@ -2394,7 +2303,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let as_int: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
+        let as_int: DwarfInteger = (&*ref_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(as_int, 2898);
     }
 
@@ -2430,7 +2339,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let as_bool: bool = (&*s_read!(result.unwrap())).try_into().unwrap();
+        let as_bool: bool = (&*ref_read!(result.unwrap())).try_into().unwrap();
         assert!(!as_bool);
 
         // assert_eq!(frame.ip, 4);
@@ -2465,7 +2374,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let as_bool: bool = (&*s_read!(result.unwrap())).try_into().unwrap();
+        let as_bool: bool = (&*ref_read!(result.unwrap())).try_into().unwrap();
         assert!(as_bool);
 
         // assert_eq!(frame.ip, 4);
@@ -2500,7 +2409,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let as_bool: bool = (&*s_read!(result.unwrap())).try_into().unwrap();
+        let as_bool: bool = (&*ref_read!(result.unwrap())).try_into().unwrap();
         assert!(as_bool);
 
         // let mut frame = vm.frames.pop();
@@ -2548,7 +2457,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let result: String = (&*s_read!(result.unwrap())).try_into().unwrap();
+        let result: String = (&*ref_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(result, "you rock!");
 
         // let mut frame = vm.frames.pop();
@@ -2587,91 +2496,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let result: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
+        let result: DwarfInteger = (&*ref_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(result, 42);
-    }
-
-    #[test]
-    fn test_instr_field() {
-        use crate::{
-            chacha::value::Struct,
-            lu_dog::{Field, ValueType, WoogStruct},
-            PATH_ROOT,
-        };
-        use sarzak::sarzak::{ObjectStore as SarzakStore, Ty, MODEL as SARZAK_MODEL};
-
-        #[cfg(feature = "tracy")]
-        Client::start();
-
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-
-        let ctx = Context::default();
-        let struct_ty = {
-            let mut lu_dog = s_write!(ctx.lu_dog);
-
-            // We need to create a WoogStruct and add some fields to it
-            let foo = WoogStruct::new(
-                "Foo".to_owned(),
-                PATH_ROOT.to_owned(),
-                None,
-                None,
-                &mut lu_dog,
-            );
-            // let _ = WoogItem::new_woog_struct(source, &mt, lu_dog);
-            let struct_ty = ValueType::new_woog_struct(true, &foo, &mut lu_dog);
-            let ty = Ty::new_integer(&sarzak);
-            let ty = ValueType::new_ty(true, &ty, &mut lu_dog);
-            let _ = Field::new("bar".to_owned(), &foo, &ty, &mut lu_dog);
-            let ty = Ty::new_float(&sarzak);
-            let ty = ValueType::new_ty(true, &ty, &mut lu_dog);
-            let _ = Field::new("baz".to_owned(), &foo, &ty, &mut lu_dog);
-            struct_ty
-        };
-
-        let ty = Ty::new_z_string(&sarzak);
-        let ty = ValueType::new_ty(true, &ty, &mut s_write!(ctx.lu_dog));
-        let ty = Value::ValueType((*s_read!(ty)).clone());
-
-        // Now we need an instance.
-        let dwarf_home = env::var("DWARF_HOME")
-            .unwrap_or_else(|_| {
-                let mut home = env::var("HOME").unwrap();
-                home.push_str("/.dwarf");
-                home
-            })
-            .into();
-
-        let ctx = initialize_interpreter(2, dwarf_home, ctx).unwrap();
-        let ty_name = PrintableValueType(false, struct_ty.clone(), ctx.models());
-        let mut foo_inst = Struct::new(ty_name.to_string(), &struct_ty);
-        foo_inst.define_field("bar", 42.into());
-        foo_inst.define_field("baz", std::f64::consts::PI.into());
-
-        let mut thonk = Thonk::new("test".to_string());
-        thonk.add_instruction(Instruction::Push(Value::Struct(foo_inst)), None);
-        thonk.add_instruction(Instruction::Push("baz".into()), None);
-        thonk.add_instruction(Instruction::FieldRead, None);
-        thonk.add_instruction(Instruction::Return, None);
-        println!("{}", thonk);
-        let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
-        program.add_thonk(thonk);
-
-        program.add_symbol("STRING".to_owned(), ty);
-
-        #[cfg(feature = "async")]
-        let mut vm = VM::new(&program, &[], &PathBuf::new(), 1, true);
-        #[cfg(not(feature = "async"))]
-        let mut vm = VM::new(&program, &[], &PathBuf::new());
-
-        let result = vm.invoke("test", &[]);
-        println!("{:?}", result);
-        println!("{:?}", vm);
-
-        // assert!(vm.stack.is_empty());
-
-        assert!(result.is_ok());
-
-        let result: DwarfFloat = (&*s_read!(result.unwrap())).try_into().unwrap();
-        assert_eq!(result, std::f64::consts::PI);
     }
 }

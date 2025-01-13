@@ -59,7 +59,13 @@ pub enum DwarfError {
     ///
     /// This non-specific error is a catch-all error type.
     #[snafu(display("\n{}: {description}", ERR_CLR.bold().paint("error")))]
-    Generic { description: String },
+    Generic {
+        description: String,
+        location: Location,
+        file: String,
+        span: Span,
+        program: String,
+    },
 
     /// Generic Warning
     ///
@@ -348,6 +354,38 @@ impl fmt::Display for DwarfErrorReporter<'_> {
                     .with_label(
                         Label::new((file, span))
                             .with_message("this enum does not exist")
+                            .with_color(Color::Red),
+                    );
+
+                let report = if is_uber {
+                    report.with_note(format!(
+                        "{}:{}:{}",
+                        OTHER_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
+                    ))
+                } else {
+                    report
+                };
+
+                report
+                    .finish()
+                    .write((file, Source::from(&program)), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
+            DwarfError::Generic {
+                description: desc,
+                file,
+                span,
+                program,
+                location,
+            } => {
+                let report = Report::build(ReportKind::Error, file, span.start)
+                    .with_message(desc)
+                    .with_label(
+                        Label::new((file, span.to_owned()))
+                            .with_message(format!("{}", desc.fg(Color::Red)))
                             .with_color(Color::Red),
                     );
 

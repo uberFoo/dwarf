@@ -18,7 +18,6 @@ pub mod bubba;
 pub mod chacha;
 pub mod dwarf;
 pub mod plug_in;
-pub mod stdlib;
 
 #[cfg(all(
     feature = "tui",
@@ -26,13 +25,9 @@ pub mod stdlib;
     not(any(feature = "single", feature = "single-vec", feature = "multi-nd-vec"))
 ))]
 pub mod tui;
-// pub(crate) mod woog_structs;
-// pub mod lu_dog_proxy;
 
 pub use ::sarzak::{lu_dog, sarzak};
 use bubba::error::Error as BubbaError;
-pub use chacha::value::Value;
-pub(crate) use chacha::{error::ChaChaError, interpreter};
 
 // These should eventually come from the domain.
 pub type DwarfInteger = i64;
@@ -80,7 +75,6 @@ mod keywords {
     pub(crate) const PARSE: &str = "parse";
     pub(crate) const PLUGIN: &str = "Plugin";
     pub(crate) const PUSH: &str = "push";
-    pub(crate) const RESULT: &str = "Result";
     pub(crate) const SLEEP: &str = "sleep";
     pub(crate) const SOME: &str = "Some";
     pub(crate) const REPLACE: &str = "replace";
@@ -98,7 +92,7 @@ mod keywords {
     pub(crate) const TIMER: &str = "timer";
     pub(crate) const TO_DIGIT: &str = "to_digit";
     pub(crate) const TRIM: &str = "trim";
-    pub(crate) const TYPEOF: &str = "typeof";
+    pub(crate) const TYPEOF: &str = "type_of";
     // 🚧 We have a token already...
     pub(crate) const FQ_UUID_TYPE: &str = "::Uuid";
     pub(crate) const UUID_TYPE: &str = "Uuid";
@@ -298,9 +292,98 @@ cfg_if::cfg_if! {
                 $arg.into_inner().unwrap()
             };
         }
+    } else if #[cfg(feature = "lu-dog-rc")] {
+        type SarzakStorePtr = uuid::Uuid;
+        type RcType<T> = std::rc::Rc<T>;
+        impl<T> NewRcType<T> for RcType<T> {
+            fn new_rc_type(value: T) -> RcType<T> {
+                std::rc::Rc::new(value)
+            }
+        }
 
+        pub type RefType<T> = std::rc::Rc<std::cell::RefCell<T>>;
+
+        impl<T> NewRef<T> for RefType<T> {
+            fn new_ref(value: T) -> RefType<T> {
+                std::rc::Rc::new(std::cell::RefCell::new(value))
+            }
+        }
+
+        // Macros to abstract the underlying read/write operations.
+        #[macro_export]
+        macro_rules! ref_read {
+            ($arg:expr) => {
+                $arg.borrow()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_try_read {
+            ($arg:expr) => {
+                $arg.try_read()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_write {
+            ($arg:expr) => {
+                $arg.borrow_mut()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_to_inner {
+            ($arg:expr) => {
+                $arg.into_inner().unwrap()
+            };
+        }
    } else if #[cfg(feature = "multi-vec")] {
         type SarzakStorePtr = usize;
+        type RcType<T> = std::sync::Arc<T>;
+        impl<T> NewRcType<T> for RcType<T> {
+            fn new_rc_type(value: T) -> RcType<T> {
+                std::sync::Arc::new(value)
+            }
+        }
+
+        pub type RefType<T> = std::sync::Arc<std::sync::RwLock<T>>;
+        impl<T> NewRef<T> for RefType<T> {
+            fn new_ref(value: T) -> RefType<T> {
+                std::sync::Arc::new(std::sync::RwLock::new(value))
+            }
+        }
+
+        // Macros to abstract the underlying read/write operations.
+        #[macro_export]
+        macro_rules! ref_read {
+            ($arg:expr) => {
+                $arg.read().unwrap()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_try_read {
+            ($arg:expr) => {
+                $arg.try_read()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_write {
+            ($arg:expr) => {
+                $arg.write().unwrap()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_to_inner {
+            ($arg:expr) => {
+                $arg.into_inner().unwrap()
+            };
+        }
+
+   } else if #[cfg(feature = "multi-lu-dog")] {
+        type SarzakStorePtr = uuid::Uuid;
         type RcType<T> = std::sync::Arc<T>;
         impl<T> NewRcType<T> for RcType<T> {
             fn new_rc_type(value: T) -> RcType<T> {
@@ -420,67 +503,6 @@ macro_rules! new_ref {
     };
 }
 
-macro_rules! function {
-    () => {{
-        fn f() {}
-        fn type_name_of<T>(_: T) -> &'static str {
-            std::any::type_name::<T>()
-        }
-        let name = type_name_of(f);
-        name.strip_suffix("::f").unwrap()
-    }};
-}
-pub(crate) use function;
-
-macro_rules! debug {
-    ($target:literal, $($arg:tt)*) => {
-        log::debug!(
-            target: $target,
-            "{}: {}\n  --> {}:{}:{}",
-            Colour::Cyan.dimmed().italic().paint(function!()),
-            format_args!($($arg)*),
-            file!(),
-            line!(),
-            column!()
-        );
-    };
-}
-pub(crate) use debug;
-
-#[allow(unused_macros)]
-macro_rules! warning {
-    ($target:literal, $($arg:tt)*) => {
-        log::warn!(
-            target: $target,
-            "{}: {}\n  --> {}:{}:{}",
-            Colour::Cyan.dimmed().italic().paint(function!()),
-            format_args!($($arg)*),
-            file!(),
-            line!(),
-            column!()
-        );
-    };
-}
-#[allow(unused_imports)]
-pub(crate) use warning;
-
-#[allow(unused_macros)]
-macro_rules! error {
-    ($target:literal, $($arg:tt)*) => {
-        log::error!(
-            target: $target,
-            "{}: {}\n  --> {}:{}:{}",
-            Colour::Red.dimmed().italic().paint(function!()),
-            format_args!($($arg)*),
-            file!(),
-            line!(),
-            column!()
-        );
-    };
-}
-#[allow(unused_imports)]
-pub(crate) use error;
-
 //
 // Command line parameters
 #[derive(Args, Clone, Debug, Deserialize, Serialize)]
@@ -509,7 +531,7 @@ pub(crate) type ModelStore =
 /// This type is used to signify that a struct, enum, or ObjectStore have been
 /// added in the extruder. The information is picked up by the interpreter and
 /// used to update the corresponding structures in the interpreter.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Dirty {
     Enum(RefType<lu_dog::Enumeration>),
     Func(RefType<lu_dog::Function>),
@@ -563,9 +585,6 @@ impl Default for Context {
         }
     }
 }
-
-pub type ValueResult = Result<RefType<Value>, ChaChaError>;
-pub type VmValueResult = Result<RefType<crate::bubba::value::Value>, BubbaError>;
 
 pub(crate) trait Desanitize {
     fn desanitize(&self) -> String;

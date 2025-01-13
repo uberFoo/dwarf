@@ -142,20 +142,26 @@
                 }
             },
             "args": [
+                // "test.ore",
+                // "tests/harness/extensions/test_ffi/test.ore",
+                // "tests/proxy/declare.ore",
                 // "tests/vm_harness/types/map/get.ore",
                 // "tests/vm_harness/lambda.ore"
-                "mandelbrot.ore",
+                // "mandelbrot.ore",
                 // "https://raw.githubusercontent.com/uberFoo/dwarf/develop/mandelbrot.ore"
-                // "uberfoo.rs/src/uberfoo.rs.ore",
-                // "-c",
-                // "uberfoo.rs/src",
-                // "-t",
+                //
+                "uberfoo.rs/src/uberfoo.rs.ore",
+                "-c",
+                "uberfoo.rs/src",
+                "-t",
+                //
                 "-b",
                 "--uber",
             ],
             "cwd": "${workspaceFolder}",
             "env": {
-                "RUST_LOG": "extruder=debug"
+                "CLIENT_SECRET": "ff786a55a988bcdcfee228643cc782956d075f8b",
+                // "RUST_LOG": "vm=trace,async=trace"
             },
             "preRunCommands": [
                 "script lldb.debugger.HandleCommand('settings set target.source-map /rustc/{} \"{}/lib/rustlib/src/rust\"'.format(os.popen('rustc --version --verbose').read().split('commit-hash: ')[1].split('\\n')[0].strip(), os.popen('rustc --print sysroot').readline().strip()))"

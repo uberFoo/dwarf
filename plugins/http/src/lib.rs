@@ -16,10 +16,7 @@ use abi_stable::{
 };
 use async_compat::Compat;
 use dwarf::{
-    chacha::{
-        error::ChaChaError,
-        ffi_value::{FfiStruct, FfiValue},
-    },
+    chacha::ffi_value::FfiValue,
     plug_in::{Error, LambdaCall, Plugin, PluginModRef, PluginModule, PluginType, Plugin_TO},
     DwarfInteger,
 };
@@ -82,6 +79,9 @@ mod http_client {
         ROk(Plugin_TO::from_value(HttpClient::default(), TD_Opaque))
     }
 
+    /// Note that the things dangling off here need to be wrapped in `Arc`'s so
+    /// that they can be cloned. We need to be Clone to satisfy the TD_Opaque
+    /// bound for the plugin stuff.
     #[derive(Clone, Debug)]
     struct HttpClient {
         client: Client,
@@ -135,13 +135,11 @@ mod http_client {
                 match ty.as_str() {
                     "HttpClient" => match func.as_str() {
                         "get" => {
-                            tracing::trace!("get enter");
-                            let url: String = args
-                                .first()
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
+                            tracing::trace!(target: "http", "get enter");
+                            let url: String = match args.first().unwrap().try_into() {
+                                Ok(url) => url,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
 
                             let request = self.client.get(url);
 
@@ -149,20 +147,71 @@ mod http_client {
                             let key = entry.key();
                             self.requests.insert(Arc::new(request));
 
-                            tracing::trace!("get exit");
+                            tracing::trace!(target: "http", "get exit");
+                            Ok(FfiValue::Integer(key as DwarfInteger))
+                        }
+                        "post" => {
+                            tracing::trace!(target: "http", "post enter");
+                            let url: String = match args.get(0).unwrap().try_into() {
+                                Ok(url) => url,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
+
+                            let request = self.client.post(url);
+
+                            let entry = self.requests.vacant_entry();
+                            let key = entry.key();
+                            self.requests.insert(Arc::new(request));
+
+                            tracing::trace!(target: "http", "post exit");
                             Ok(FfiValue::Integer(key as DwarfInteger))
                         }
                         func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                     },
                     "Request" => match func.as_str() {
+                        "header" => {
+                            tracing::trace!(target: "http", "header enter");
+                            let key: DwarfInteger = match args.get(0).unwrap().try_into() {
+                                Ok(key) => key,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
+
+                            let header: String = match args.get(1).unwrap().try_into() {
+                                Ok(header) => header,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
+
+                            let value: String = match args.get(2).unwrap().try_into() {
+                                Ok(value) => value,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
+
+                            if !self.requests.contains(key as usize) {
+                                return RErr(Error::Plugin("Invalid Request".into()));
+                            }
+
+                            let request = self.requests.remove(key as usize);
+                            if let Some(request) = Arc::into_inner(request) {
+                                let request = request.header(header, value);
+
+                                let entry = self.requests.vacant_entry();
+                                let key = entry.key();
+                                self.requests.insert(Arc::new(request));
+                                Ok(FfiValue::Integer(key as DwarfInteger))
+                            } else {
+                                Err(Error::Plugin("Too many references to request.".into()))
+                            }
+                        }
                         "send" => {
-                            tracing::trace!("send enter");
-                            let key: DwarfInteger = args
-                                .first()
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
+                            tracing::trace!(target: "http", "send enter");
+                            let key: DwarfInteger = match args.get(0).unwrap().try_into() {
+                                Ok(key) => key,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
+
+                            if !self.requests.contains(key as usize) {
+                                return RErr(Error::Plugin("Invalid Request".into()));
+                            }
 
                             let request = self.requests.remove(key as usize);
                             if let Some(request) = Arc::into_inner(request) {
@@ -181,10 +230,10 @@ mod http_client {
                                         RErr(RBox::new(FfiValue::Integer(key as DwarfInteger)))
                                     }
                                 };
-                                tracing::trace!("send exit");
+                                tracing::trace!(target: "http", "send exit");
                                 Ok(FfiValue::Result(response))
                             } else {
-                                tracing::trace!("send exit");
+                                tracing::trace!(target: "http", "send exit");
                                 Ok(FfiValue::Error("Too many references to request.".into()))
                             }
                         }
@@ -192,13 +241,15 @@ mod http_client {
                     },
                     "Response" => match func.as_str() {
                         "text" => {
-                            tracing::trace!("text enter");
-                            let key: DwarfInteger = args
-                                .first()
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
+                            tracing::trace!(target: "http", "text enter");
+                            let key: DwarfInteger = match args.get(0).unwrap().try_into() {
+                                Ok(key) => key,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
+
+                            if !self.responses.contains(key as usize) {
+                                return RErr(Error::Plugin("Invalid Response".into()));
+                            }
 
                             let response = self.responses.remove(key as usize);
                             if let Some(response) = Arc::into_inner(response) {
@@ -212,10 +263,10 @@ mod http_client {
                                         RErr(RBox::new(FfiValue::Integer(key as DwarfInteger)))
                                     }
                                 };
-                                tracing::trace!("text exit");
+                                tracing::trace!(target: "http", "text exit");
                                 Ok(FfiValue::Result(result))
                             } else {
-                                tracing::trace!("text exit");
+                                tracing::trace!(target: "http", "text exit");
                                 Ok(FfiValue::Error("Too many references to response.".into()))
                             }
                         }
@@ -223,22 +274,24 @@ mod http_client {
                     },
                     "HttpError" => match func.as_str() {
                         "to_string" => {
-                            tracing::trace!("to_string enter");
-                            let key: DwarfInteger = args
-                                .first()
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
+                            tracing::trace!(target: "http", "to_string enter");
+                            let key: DwarfInteger = match args.get(0).unwrap().try_into() {
+                                Ok(key) => key,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
+
+                            if !self.errors.contains(key as usize) {
+                                return RErr(Error::Plugin("Invalid HttpError".into()));
+                            }
 
                             let error = self.errors.remove(key as usize);
                             if let Some(error) = Arc::into_inner(error) {
                                 let result =
                                     ROk(RBox::new(FfiValue::String(error.to_string().into())));
-                                tracing::trace!("to_string exit");
+                                tracing::trace!(target: "http", "to_string exit");
                                 Ok(FfiValue::Result(result))
                             } else {
-                                tracing::trace!("to_string exit");
+                                tracing::trace!(target: "http", "to_string exit");
                                 Ok(FfiValue::Error("Too many references to error.".into()))
                             }
                         }
@@ -262,7 +315,7 @@ mod http_server {
     use std::sync::{Arc, Mutex};
 
     use http_body_util::Full;
-    use hyper::body::{Body, Bytes};
+    use hyper::body::Bytes;
     use hyper::header::{HeaderValue, CONTENT_TYPE};
     use hyper::server::conn::http1;
     use hyper::service::Service;
@@ -513,16 +566,16 @@ mod http_server {
                         }
                         "route" => {
                             let FfiValue::String(path) = args.get(0).unwrap() else {
-                                panic!("Invalid path");
+                                return RErr(Error::Plugin("Invalid path".into()));
                             };
 
                             let FfiValue::String(method) = args.get(1).unwrap() else {
-                                panic!("Invalid method");
+                                return RErr(Error::Plugin("Invalid method".into()));
                             };
                             let method = Method::from(MethodStr(method.as_str()));
 
                             let FfiValue::Lambda(number) = args.get(2).unwrap() else {
-                                panic!("Invalid lambda");
+                                return RErr(Error::Plugin("Invalid lambda".into()));
                             };
 
                             println!("adding route {} {}", path, method);
@@ -537,16 +590,16 @@ mod http_server {
                         }
                         "prefix_route" => {
                             let FfiValue::String(path) = args.get(0).unwrap() else {
-                                panic!("Invalid path");
+                                return RErr(Error::Plugin("Invalid path".into()));
                             };
 
                             let FfiValue::String(method) = args.get(1).unwrap() else {
-                                panic!("Invalid method");
+                                return RErr(Error::Plugin("Invalid method".into()));
                             };
                             let method = Method::from(MethodStr(method.as_str()));
 
                             let FfiValue::Lambda(number) = args.get(2).unwrap() else {
-                                panic!("Invalid lambda");
+                                return RErr(Error::Plugin("Invalid lambda".into()));
                             };
 
                             println!("adding route {} {}", path, method);
@@ -560,19 +613,15 @@ mod http_server {
                             Ok(FfiValue::Empty)
                         }
                         "use_tls" => {
-                            let cert: String = args
-                                .get(0)
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
+                            let cert: String = match args.get(0).unwrap().try_into() {
+                                Ok(cert) => cert,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
 
-                            let key: String = args
-                                .get(1)
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
+                            let key: String = match args.get(1).unwrap().try_into() {
+                                Ok(key) => key,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
 
                             let cert_file = fs::File::open(cert.clone())
                                 .map_err(|e| {
@@ -617,18 +666,14 @@ mod http_server {
                             Ok(FfiValue::Integer(key as DwarfInteger))
                         }
                         "status" => {
-                            let key: DwarfInteger = args
-                                .first()
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
-                            let status: DwarfInteger = args
-                                .get(1)
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
+                            let key: DwarfInteger = match args.get(0).unwrap().try_into() {
+                                Ok(key) => key,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
+                            let status: DwarfInteger = match args.get(1).unwrap().try_into() {
+                                Ok(status) => status,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
 
                             let mut guard = self.response_builders.lock().unwrap();
                             if let Some(option) = guard.get_mut(key as usize) {
@@ -642,18 +687,14 @@ mod http_server {
                             }
                         }
                         "body" => {
-                            let key: DwarfInteger = args
-                                .first()
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
-                            let body: String = args
-                                .get(1)
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
+                            let key: DwarfInteger = match args.get(0).unwrap().try_into() {
+                                Ok(key) => key,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
+                            let body: String = match args.get(1).unwrap().try_into() {
+                                Ok(body) => body,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
 
                             let mut guard = self.response_builders.lock().unwrap();
                             let option = guard.get_mut(key as usize).unwrap();
@@ -669,18 +710,14 @@ mod http_server {
                             Ok(FfiValue::Integer(key as DwarfInteger))
                         }
                         "json" => {
-                            let key: DwarfInteger = args
-                                .first()
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
-                            let json: String = args
-                                .get(1)
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
+                            let key: DwarfInteger = match args.first().unwrap().try_into() {
+                                Ok(key) => key,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
+                            let json: String = match args.get(1).unwrap().try_into() {
+                                Ok(json) => json,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
 
                             let mut guard = self.response_builders.lock().unwrap();
                             let option = guard.get_mut(key as usize).unwrap();
@@ -698,24 +735,18 @@ mod http_server {
                             Ok(FfiValue::Integer(key as DwarfInteger))
                         }
                         "set_header" => {
-                            let key: DwarfInteger = args
-                                .first()
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
-                            let header: String = args
-                                .get(1)
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
-                            let value: String = args
-                                .get(2)
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
+                            let key: DwarfInteger = match args.first().unwrap().try_into() {
+                                Ok(key) => key,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
+                            let header: String = match args.get(1).unwrap().try_into() {
+                                Ok(header) => header,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
+                            let value: String = match args.get(2).unwrap().try_into() {
+                                Ok(value) => value,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
 
                             let mut guard = self.response_builders.lock().unwrap();
                             let option = guard.get_mut(key as usize).unwrap();
@@ -729,12 +760,10 @@ mod http_server {
                     },
                     "Request" => match func.as_str() {
                         "uri" => {
-                            let key: DwarfInteger = args
-                                .first()
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
+                            let key: DwarfInteger = match args.first().unwrap().try_into() {
+                                Ok(key) => key,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
 
                             if let Some(request) = self.requests.lock().unwrap().get(key as usize) {
                                 let uri = request.uri();
@@ -753,12 +782,10 @@ mod http_server {
                     },
                     "Suffix" => match func.as_str() {
                         "to_string" => {
-                            let key: DwarfInteger = args
-                                .first()
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
+                            let key: DwarfInteger = match args.first().unwrap().try_into() {
+                                Ok(key) => key,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
 
                             let guard = self.strings.lock().unwrap();
                             let string = guard.get(key as usize).unwrap();
@@ -769,12 +796,10 @@ mod http_server {
                     },
                     "Uri" => match func.as_str() {
                         "path" => {
-                            let key: DwarfInteger = args
-                                .first()
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
+                            let key: DwarfInteger = match args.first().unwrap().try_into() {
+                                Ok(key) => key,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
 
                             let guard = self.uris.lock().unwrap();
                             let guard = guard.borrow();
@@ -783,12 +808,10 @@ mod http_server {
                             Ok(FfiValue::String(path.into()))
                         }
                         "query" => {
-                            let key: DwarfInteger = args
-                                .first()
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
+                            let key: DwarfInteger = match args.first().unwrap().try_into() {
+                                Ok(key) => key,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
 
                             let guard = self.uris.lock().unwrap();
                             let guard = guard.borrow();

@@ -2,6 +2,11 @@
 **/target
 *.tracy
 *.道
+crates/lambda
+crates/plugin
+crates/types
+crates/value
+.idea
 woog_structs.rs
 .dwarf_history
 coverage.lcov

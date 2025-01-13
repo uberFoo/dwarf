@@ -86,7 +86,7 @@ fn gzip(src_path: &Path, dest_path: &Path) -> anyhow::Result<()> {
 fn zip(src_path: &Path, symbols_path: Option<&PathBuf>, dest_path: &Path) -> anyhow::Result<()> {
     let file = File::create(dest_path)?;
     let mut writer = ZipWriter::new(BufWriter::new(file));
-    writer.start_file(
+    writer.start_file::<_, zip::write::ExtendedFileOptions>(
         src_path.file_name().unwrap().to_str().unwrap(),
         FileOptions::default()
             .last_modified_time(
@@ -102,7 +102,7 @@ fn zip(src_path: &Path, symbols_path: Option<&PathBuf>, dest_path: &Path) -> any
     let mut input = io::BufReader::new(File::open(src_path)?);
     io::copy(&mut input, &mut writer)?;
     if let Some(symbols_path) = symbols_path {
-        writer.start_file(
+        writer.start_file::<_, zip::write::ExtendedFileOptions>(
             symbols_path.file_name().unwrap().to_str().unwrap(),
             FileOptions::default()
                 .last_modified_time(

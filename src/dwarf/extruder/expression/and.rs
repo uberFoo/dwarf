@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use snafu::{location, Location};
+use snafu::location;
 
 use crate::{
     dwarf::{

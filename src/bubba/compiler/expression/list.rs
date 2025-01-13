@@ -1,13 +1,15 @@
-use snafu::{location, Location};
+use snafu::location;
 
 use crate::{
     bubba::{
         compiler::{compile_expression, CThonk, Context, Result, EMPTY},
         instr::Instruction,
+        new_ref, s_read as ref_read,
         value::Value,
+        RefType,
     },
     lu_dog::ValueType,
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, POP_CLR,
+    s_read, SarzakStorePtr, Span, POP_CLR,
 };
 
 #[cfg_attr(not(test), tracing::instrument(skip(thonk, context)))]
@@ -69,21 +71,24 @@ pub(in crate::bubba::compiler) fn compile_list_expression(
             next = element.next;
         }
 
-        let expr = &list.r15_expression(&lu_dog)[0];
-        let ty = &s_read!(expr).r11_x_value(&lu_dog)[0];
-        let ty = s_read!(ty).r24_value_type(&lu_dog)[0].clone();
+        // let expr = &list.r15_expression(&lu_dog)[0];
+        // let ty = &s_read!(expr).r11_x_value(&lu_dog)[0];
+        // let ty = s_read!(ty).r24_value_type(&lu_dog)[0].clone();
+        // let ty = s_read!(ty).clone();
+        let ty = &list.r257_value_type(&lu_dog)[0];
         let ty = s_read!(ty).clone();
         thonk.insert_instruction(Instruction::Push(Value::ValueType(ty)), location!());
 
         thonk.insert_instruction(Instruction::NewList(size), location!());
     } else {
         let empty = context.get_type(EMPTY).unwrap().clone();
+        let empty = new_ref!(ValueType, empty);
         let ty = Value::List {
-            ty: new_ref!(ValueType, empty),
+            ty: empty,
             inner: new_ref!(Vec<RefType<Value>>, vec![]),
         }
         .get_value_type(context);
-        let ty = s_read!(ty).clone();
+        let ty = ref_read!(ty).clone();
         thonk.insert_instruction(Instruction::Push(Value::ValueType(ty)), location!());
         thonk.insert_instruction_with_span(Instruction::NewList(0), entry_span, location!());
     }
