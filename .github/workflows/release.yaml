@@ -90,7 +90,7 @@ jobs:
               run: cargo bench --features="single-vec repl" --no-default-features
 
             - name: Upload artifacts
-              uses: actions/upload-artifact@v1
+              uses: actions/upload-artifact@v4
               with:
                   name: dist-${{ matrix.target }}
                   path: ./dist
