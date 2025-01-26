@@ -49,8 +49,9 @@ use crate::{
 
 mod expression;
 use expression::{
-    a_weight, addition, and, any_list, assignment, bang, block, boolean_literal, expr_as,
-    method_call, static_method_call, struct_expr, unit_enum,
+    a_weight, addition, and, any_list, assignment, bang, block, boolean_literal, char_literal,
+    expr_as, float_literal, integer_literal, method_call, static_method_call, string_literal,
+    struct_expr, unit_enum,
 };
 
 pub(super) const EXTENSION_DIR: &str = "extensions";
@@ -1160,21 +1161,8 @@ pub(super) fn inter_expression(
         ParserExpression::BooleanLiteral(literal) => {
             boolean_literal::inter(literal, span, block, context, lu_dog)
         }
-        //
-        // CharLiteral
-        //
         ParserExpression::CharLiteral(literal) => {
-            let literal = CharLiteral::new(literal, lu_dog);
-            let expr = Expression::new_literal(
-                true,
-                &Literal::new_char_literal(true, &literal, lu_dog),
-                lu_dog,
-            );
-            let ty = ValueType::new_char(true, lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), ty))
+            char_literal::inter(literal, span, block, lu_dog)
         }
         //
         // Debug
@@ -1516,20 +1504,8 @@ pub(super) fn inter_expression(
                 }])},
             }
         }
-        //
-        // FloatLiteral
-        //
         ParserExpression::FloatLiteral(literal) => {
-            let expr = Expression::new_literal(
-                true,
-                &Literal::new_float_literal(true, &FloatLiteral::new(literal, lu_dog), lu_dog),
-                lu_dog,
-            );
-            let ty = ValueType::new_ty(true, &Ty::new_float(context.sarzak), lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), ty))
+            float_literal::inter(literal, span, block, context, lu_dog)
         }
         //
         // For Loop
@@ -2016,20 +1992,8 @@ pub(super) fn inter_expression(
 
             Ok(((expr, span), target_ty))
         }
-        //
-        // IntegerLiteral
-        //
         ParserExpression::IntegerLiteral(literal) => {
-            let expr = Expression::new_literal(
-                true,
-                &Literal::new_integer_literal(true, &IntegerLiteral::new(literal, lu_dog), lu_dog),
-                lu_dog,
-            );
-            let ty = ValueType::new_ty(true, &Ty::new_integer(context.sarzak), lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), ty))
+            integer_literal::inter(literal, span, block, context, lu_dog)
         }
         //
         // Lambda
@@ -3079,25 +3043,8 @@ pub(super) fn inter_expression(
                 lu_dog,
             )
         }
-        //
-        // StringLiteral
-        //
         ParserExpression::StringLiteral(literal) => {
-            debug!("literal {:?}", literal);
-            let expr = Expression::new_literal(
-                true,
-                &Literal::new_string_literal(
-                    true,
-                    &StringLiteral::new(literal.to_owned(), lu_dog),
-                    lu_dog,
-                ),
-                lu_dog,
-            );
-            let ty = ValueType::new_ty(true, &Ty::new_z_string(context.sarzak), lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), ty))
+            string_literal::inter(literal, span, block, context, lu_dog)
         }
         //
         // Struct
