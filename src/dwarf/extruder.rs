@@ -49,8 +49,8 @@ use crate::{
 
 mod expression;
 use expression::{
-    a_weight, addition, and, any_list, assignment, bang, block, expr_as, method_call,
-    static_method_call, struct_expr, unit_enum,
+    a_weight, addition, and, any_list, assignment, bang, block, boolean_literal, expr_as,
+    method_call, static_method_call, struct_expr, unit_enum,
 };
 
 pub(super) const EXTENSION_DIR: &str = "extensions";
@@ -1144,9 +1144,6 @@ pub(super) fn inter_expression(
         ParserExpression::Bang(expr) => {
             bang::inter(expr, span, block, context, import_stack, lu_dog)
         }
-        //
-        // Block
-        //
         ParserExpression::Block(a_sink, ref stmts, vars, tys) => {
             block::inter(
                 a_sink,
@@ -1160,25 +1157,8 @@ pub(super) fn inter_expression(
                 lu_dog,
             )
         }
-        //
-        // BooleanLiteral
-        //
         ParserExpression::BooleanLiteral(literal) => {
-            let literal = if literal {
-                BooleanLiteral::new_true_literal(true, lu_dog)
-            } else {
-                BooleanLiteral::new_false_literal(true, lu_dog)
-            };
-            let expr = Expression::new_literal(
-                true,
-                &Literal::new_boolean_literal(true, &literal, lu_dog),
-                lu_dog,
-            );
-            let ty = ValueType::new_ty(true, &Ty::new_boolean(context.sarzak), lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), ty))
+            boolean_literal::inter(literal, span, block, context, lu_dog)
         }
         //
         // CharLiteral

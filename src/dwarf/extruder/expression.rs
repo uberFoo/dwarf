@@ -5,6 +5,7 @@ pub(super) mod any_list;
 pub(super) mod assignment;
 pub(super) mod bang;
 pub(super) mod block;
+pub(super) mod boolean_literal;
 pub(super) mod expr_as;
 pub(super) mod method_call;
 pub(super) mod static_method_call;

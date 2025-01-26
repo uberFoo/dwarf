@@ -40,9 +40,9 @@ pub fn inter(
         let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
         let var = Variable::new_local_variable(var, &local, lu_dog);
         debug!("variable {var:?}");
-        let value = XValue::new_variable(&block, &ty.0, &var, lu_dog);
         // 🚧 We should really be passing a span in the Block so that
         // we can link this XValue to it.
+        let _value = XValue::new_variable(&block, &ty.0, &var, lu_dog);
     }
 
     // let block = create_block::<P>(None, lu_dog)?;
