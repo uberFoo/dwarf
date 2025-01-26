@@ -28,7 +28,7 @@ use crate::{
     lu_dog::{
         store::ObjectStore as LuDogStore,
         types::{
-            AWait, Block, Body, BooleanOperator, Call, CharLiteral, EnumFieldEnum, Expression,
+            Block, Body, BooleanOperator, Call, CharLiteral, EnumFieldEnum, Expression,
             ExpressionBit, ExpressionEnum, ExpressionStatement, Field, ForLoop, FormatBit,
             FormatString, FuncGeneric, FunctionCall, HaltAndCatchFire, ImplementationBlock, Import,
             Index, IntegerLiteral, Item as WoogItem, ItemStatement, Lambda, LambdaParameter,
@@ -48,7 +48,10 @@ use crate::{
 };
 
 mod expression;
-use expression::{addition, and, expr_as, method_call, static_method_call, struct_expr, unit_enum};
+use expression::{
+    a_weight, addition, and, any_list, assignment, bang, block, expr_as, method_call,
+    static_method_call, struct_expr, unit_enum,
+};
 
 pub(super) const EXTENSION_DIR: &str = "extensions";
 pub(super) const JSON_EXT: &str = "json";
@@ -136,6 +139,7 @@ macro_rules! link_list_element {
         Some(next.id)
     }};
 }
+pub(crate) use link_list_element;
 
 macro_rules! function {
     () => {{
@@ -1125,264 +1129,36 @@ pub(super) fn inter_expression(
         ParserExpression::And(lhs_p, rhs_p) => {
             and::inter(lhs_p, rhs_p, span, block, context, import_stack, lu_dog)
         }
-        //
-        // AnyList
-        //
         ParserExpression::AnyList(ref elements) => {
-            debug!("anylist {:?}", elements);
-            if elements.is_empty() {
-                panic!("Just don't do this. It doesn't even merit an error.");
-            } else {
-                let mut elements = elements.iter();
-
-                let element = elements.next().unwrap();
-                let ((first, first_span), first_ty) = inter_expression(
-                    &new_ref!(ParserExpression, element.0.to_owned()),
-                    &element.1,
-                    block,
-                    context,
-                    import_stack,
-                    lu_dog,
-                )?;
-
-                let element = ListElement::new(0, &first, None, lu_dog);
-                let expr = Expression::new_list_element(true, &element, lu_dog);
-                let value = XValue::new_expression(block, &first_ty, &expr, lu_dog);
-
-                // We need to clone the span because it's already been used
-                // by the underlying value.
-                LuDogSpan::new(
-                    s_read!(first_span).end,
-                    s_read!(first_span).start,
-                    &context.source,
-                    None,
-                    Some(&value),
-                    lu_dog,
-                );
-
-               let list_expr = ListExpression::new(Some(&element),
-                   &ValueType::new_unknown(true, lu_dog), lu_dog);
-
-                let mut last_element_uuid: Option<SarzakStorePtr> = Some(s_read!(element).id);
-                let mut position = 1;
-                for element in elements {
-                    let ((elt, elt_span), elt_ty) = inter_expression(
-                        &new_ref!(ParserExpression, element.0.to_owned()),
-                        &element.1,
-                        block,
-                        context,
-                        import_stack,
-                        lu_dog,
-                    )?;
-
-                    let element = ListElement::new(position, &elt, None, lu_dog);
-                    position += 1;
-
-                    last_element_uuid = link_list_element!(last_element_uuid, element, lu_dog);
-                    let expr = Expression::new_list_element(true, &element, lu_dog);
-                    let value = XValue::new_expression(block, &elt_ty, &expr, lu_dog);
-                    LuDogSpan::new(
-                        s_read!(elt_span).end,
-                        s_read!(elt_span).start,
-                        &context.source,
-                        None,
-                        Some(&value),
-                        lu_dog,
-                    );
-                }
-
-                let expr = Expression::new_list_expression(true, &list_expr, lu_dog);
-                let ty = ValueType::new_any_list(true, lu_dog);
-                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                update_span_value(&span, &value, location!());
-
-                Ok(((expr, span), ty))
-            }
+            any_list::inter(elements, span, block, context, import_stack, lu_dog)
         }
         ParserExpression::As(expr, ref ty) => {
             expr_as::inter(expr, ty, span, block, context, import_stack, lu_dog)
         }
-        //
-        // Asm
-        //
-        // ParserExpression::Asm(ref exprs) => {
-        //     let mut exprs = exprs
-        //         .iter()
-        //         .map(|expr| {
-        //             inter_expression(
-        //                 &new_ref!(ParserExpression, expr.0.to_owned()),
-        //                 &expr.1,
-        //                 source,
-        //                 block,
-        //                 lu_dog,
-        //                 models,
-        //                 sarzak,
-        //             )
-        //         })
-        //         .collect::<Result<Vec<_>, _>>()?;
-
-        //     let static_method_call =
-        //         StaticMethodCall::new("execute_asm".to_owned(), "chacha".to_owned(), lu_dog);
-        //     //     &exprs
-        //     //         .iter()
-        //     //         .map(|expr| &expr.0)
-        //     //         .collect::<Vec<_>>()
-        //     //         .as_slice(),
-        //     //     lu_dog,
-        //     // );
-        // }
-        //
-        // Assignment
-        //
-        ParserExpression::Assignment(ref lhs_p, ref rhs_p) => {
-            let (lhs, lhs_ty) = inter_expression(
-                &new_ref!(ParserExpression, lhs_p.0.to_owned()),
-                &lhs_p.1,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-            let (rhs, rhs_ty) = inter_expression(
-                &new_ref!(ParserExpression, rhs_p.0.to_owned()),
-                &rhs_p.1,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-
-            typecheck(
-                (&lhs_ty, &lhs_p.1),
-                (&rhs_ty, &rhs_p.1),
-                location!(),
-                context,
-                lu_dog,
-            )?;
-
-            let expr = Binary::new_assignment(true, lu_dog);
-            let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
-            let expr = Expression::new_operator(true, &expr, lu_dog);
-
-            let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), lhs_ty))
+        ParserExpression::Assignment(lhs_p, rhs_p) => {
+            assignment::inter(lhs_p, rhs_p, span, block, context, import_stack, lu_dog)
         }
-        //
-        // Await
-        //
-        ParserExpression::Await(ref expr_p) => {
-            debug!("await: {expr_p:?}");
-
-            let (expr, ty) = inter_expression(
-                &new_ref!(ParserExpression, expr_p.0.to_owned()),
-                &expr_p.1,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-
-            if !matches!(s_read!(ty).subtype, ValueTypeEnum::XFuture(_)) {
-                let ty = PrintableValueType(true, &ty, context, lu_dog);
-                Err(vec![DwarfError::AwaitNotFuture {
-                    file: context.file_name.to_owned(),
-                    found: ty.to_string(),
-                    span: expr_p.1.clone(),
-                    program: context.source_string.to_owned(),
-                }])
-            } else {
-                let future = match s_read!(ty).subtype {
-                    ValueTypeEnum::XFuture(ref id) => lu_dog.exhume_x_future(id).unwrap(),
-                    _ => unreachable!(),
-                };
-                let ty = s_read!(future).r2_value_type(lu_dog)[0].clone();
-                let expr = AWait::new(&expr.0, lu_dog);
-                let expr = Expression::new_a_wait(true, &expr, lu_dog);
-                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                update_span_value(&span, &value, location!());
-
-                Ok(((expr, span), ty))
-            }
-            // }
+        ParserExpression::Await(expr_p) => {
+            a_weight::inter(expr_p, span, block, context, import_stack, lu_dog)
         }
-        //
-        // Bang
-        //
         ParserExpression::Bang(expr) => {
-            let (expr, ty) = inter_expression(
-                &new_ref!(ParserExpression, expr.0.to_owned()),
-                &expr.1,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-            let not = Unary::new_not(true, lu_dog);
-            let operator = Operator::new_unary(&expr.0, None, &not, lu_dog);
-            let expr = Expression::new_operator(true, &operator, lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), ty))
+            bang::inter(expr, span, block, context, import_stack, lu_dog)
         }
         //
         // Block
         //
         ParserExpression::Block(a_sink, ref stmts, vars, tys) => {
-            let sync = match a_sink {
-                BlockType::Async => false,
-                BlockType::Sync => true,
-            };
-            let block = Block::new(!sync, Uuid::new_v4(), Some(block), None, lu_dog);
-
-            for (var, ty) in vars.into_iter().zip(tys.into_iter()) {
-                let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
-                let var = Variable::new_local_variable(var, &local, lu_dog);
-                debug!("variable {var:?}");
-                let value = XValue::new_variable(&block, &ty.0, &var, lu_dog);
-                // 🚧 We should really be passing a span in the Block so that
-                // we can link this XValue to it.
-            }
-
-            // let block = create_block::<P>(None, lu_dog)?;
-            debug!("block {block:?}");
-            let stmts_vec: Vec<RefType<ParserStatement>> = stmts
-                .iter()
-                .map(|stmt| new_ref!(ParserStatement, stmt.0.to_owned()))
-                .collect();
-            // 🚧 The one that's commented out is correct -- assuming the block
-            // isn't `{}`. The one that isn't commented out _should_ be right,
-            // but I'm not sure that it is.
-            // let stmts_span = stmts.iter().map(|stmt| stmt.1.start).min().unwrap()
-            //     ..stmts.iter().map(|stmt| stmt.1.end).max().unwrap();
-            let stmts_span = s_read!(span).start as usize..s_read!(span).end as usize;
-
-            let expr = Expression::new_block(true, &block, lu_dog);
-            let ty = inter_statements(
-                &stmts_vec,
-                &stmts_span,
-                &block,
+            block::inter(
+                a_sink,
+                stmts,
+                vars,
+                tys,
+                span,
+                block,
                 context,
                 import_stack,
                 lu_dog,
-            )?;
-            let value = XValue::new_expression(&block, &ty.0, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            // If it's an async block then wrap it in a future.
-            let ty = match a_sink {
-                BlockType::Async => {
-                    let span = ty.1;
-                    let future = XFuture::new(&ty.0, lu_dog);
-                    (ValueType::new_x_future(true, &future, lu_dog), span)
-                }
-                BlockType::Sync => ty,
-            };
-
-            debug!("block {expr:?}");
-            Ok(((expr, span), ty.0))
+            )
         }
         //
         // BooleanLiteral
