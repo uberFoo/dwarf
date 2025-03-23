@@ -1,26 +1,17 @@
 use std::ops::Range;
 
-use log::debug;
-use snafu::location;
-
 use crate::{
     dwarf::{
         error::Result,
-        extruder::{inter_expression, typecheck, update_span_value, Context, ExprSpan},
+        extruder::{inter_expression, Context, ExprSpan},
         Expression as ParserExpression,
     },
-    lu_dog::{
-        store::ObjectStore as LuDogStore, Block, Comparison, Expression, Operator, Span, ValueType,
-        XValue,
-    },
-    new_ref,
-    sarzak::Ty,
-    NewRef, RefType,
+    lu_dog::{store::ObjectStore as LuDogStore, Block, Span, ValueType},
+    new_ref, NewRef, RefType,
 };
 
 pub fn inter(
     expr: Box<(ParserExpression, Range<usize>)>,
-    span: RefType<Span>,
     block: &RefType<Block>,
     context: &mut Context,
     import_stack: &mut Vec<String>,

@@ -51,8 +51,8 @@ mod expression;
 use expression::{
     a_weight, addition, and, any_list, assignment, bang, block, boolean_literal, char_literal,
     debug as expr_debug, division, empty, equals, expr_as, field_access, float_literal, for_loop,
-    format_string, function_call, group, gt, gte, integer_literal, method_call, static_method_call,
-    string_literal, struct_expr, unit_enum,
+    format_string, function_call, group, gt, gte, halt, integer_literal, method_call,
+    static_method_call, string_literal, struct_expr, unit_enum,
 };
 
 pub(super) const EXTENSION_DIR: &str = "extensions";
@@ -1195,27 +1195,13 @@ pub(super) fn inter_expression(
         // Group
         //
         ParserExpression::Group(expr) => {
-            group::inter(expr, span, block, context, import_stack, lu_dog)
+            group::inter(expr, block, context, import_stack, lu_dog)
         }
         //
         // Halt
         //
         ParserExpression::Halt(expr) => {
-            let (expr, _ty) = inter_expression(
-                &new_ref!(ParserExpression, expr.0.to_owned()),
-                &expr.1,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-            let ty = ValueType::new_empty(true, lu_dog);
-            let halt = HaltAndCatchFire::new(&expr.0, lu_dog);
-            let expr = Expression::new_halt_and_catch_fire(true, &halt, lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), ty))
+            halt::inter(expr, span, block, context, import_stack, lu_dog)
         }
         //
         // If
