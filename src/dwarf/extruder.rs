@@ -51,7 +51,8 @@ mod expression;
 use expression::{
     a_weight, addition, and, any_list, assignment, bang, block, boolean_literal, char_literal,
     debug as expr_debug, division, empty, equals, expr_as, field_access, float_literal, for_loop,
-    integer_literal, method_call, static_method_call, string_literal, struct_expr, unit_enum,
+    format_string, function_call, integer_literal, method_call, static_method_call, string_literal,
+    struct_expr, unit_enum,
 };
 
 pub(super) const EXTENSION_DIR: &str = "extensions";
@@ -61,19 +62,6 @@ pub(super) const LIB_TAO: &str = "lib.ore";
 pub(super) const MODEL_DIR: &str = "models";
 pub(super) const SRC_DIR: &str = "src";
 pub(super) const ORE_EXT: &str = "ore";
-
-macro_rules! link_format_bits {
-    ($last:expr, $next:expr, $store:expr) => {{
-        let next = s_read!($next);
-        if let Some(last) = $last {
-            let last = $store.exhume_format_bit(&last).unwrap().clone();
-            let mut last = s_write!(last);
-            last.next = Some(next.id);
-        }
-
-        Some(next.id)
-    }};
-}
 
 macro_rules! link_ƛ_parameter {
     ($last:expr, $next:expr, $store:expr) => {{
@@ -1185,118 +1173,11 @@ pub(super) fn inter_expression(
         ParserExpression::For(iter, collection, body) => {
             for_loop::inter(iter, collection, body, span, block, context, import_stack, lu_dog)
         }
-        //
-        // FormatString
-        //
         ParserExpression::FormatString(bits) => {
-            let format_string = FormatString::new(None, lu_dog);
-            let literal = Literal::new_format_string(true, &format_string, lu_dog);
-            let expr = Expression::new_literal(true, &literal, lu_dog);
-            let ty = ValueType::new_ty(true, &Ty::new_z_string(context.sarzak), lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            let mut last_format_bit_uuid: Option<SarzakStorePtr> = None;
-            for (bit, span) in bits {
-                let ((expr, _), _) = inter_expression(
-                    &new_ref!(ParserExpression, bit.to_owned()),
-                    &span,
-                    block,
-                    context,
-                    import_stack,
-                    lu_dog,
-                )?;
-
-                let expr_bit = ExpressionBit::new(&expr, lu_dog);
-                let format_bit =
-                    FormatBit::new_expression_bit(&format_string, None, &expr_bit, lu_dog);
-
-                if last_format_bit_uuid.is_none() {
-                    s_write!(format_string).first_format_bit = Some(s_read!(format_bit).id);
-                }
-                last_format_bit_uuid = link_format_bits!(last_format_bit_uuid, format_bit, lu_dog);
-            }
-
-            Ok(((expr, span), ty))
+            format_string::inter(&bits, span, block, context, import_stack, lu_dog)
         }
-        //
-        // FunctionCall
-        //
         ParserExpression::FunctionCall(func, args) => {
-            debug!("func {func:?}");
-            let fspan = &func.1;
-            let func = &func.0;
-            debug!("args {args:?}");
-
-            let (func_expr, ret_ty) = inter_expression(
-                &new_ref!(ParserExpression, func.to_owned()),
-                fspan,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-            debug!("func_expr {func_expr:?}");
-
-            let ret_ty = if let ValueTypeEnum::Lambda(ref l) = s_read!(ret_ty).subtype {
-                let l = lu_dog.exhume_lambda(l).unwrap();
-                let ret_ty = s_read!(l).return_type.clone();
-                let ret_ty = lu_dog.exhume_value_type(&ret_ty).unwrap();
-                ret_ty
-            } else {
-                ret_ty.clone()
-            };
-
-            let name = match func {
-                ParserExpression::LocalVariable(name) => name,
-                _ => "not-a-local-variable",
-            };
-
-            let func_call = FunctionCall::new(name.to_owned(), lu_dog);
-            let func_call =
-                Call::new_function_call(true, None, Some(&func_expr.0), &func_call, lu_dog);
-            let func = Expression::new_call(true, &func_call, lu_dog);
-            let value = XValue::new_expression(block, &ret_ty, &func, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            let mut last_arg_uuid: Option<SarzakStorePtr> = None;
-            // Note that position makes each arg unique. I don't remember if
-            // that is the explicit intention or not.
-            for (position, arg) in args.iter().enumerate() {
-                let (arg_expr, _ty) = inter_expression(
-                    &new_ref!(ParserExpression, arg.0.to_owned()),
-                    &arg.1,
-                    block,
-                    context,
-                    import_stack,
-                    lu_dog,
-                )?;
-                let arg = Argument::new(
-                    position as DwarfInteger,
-                    &arg_expr.0,
-                    &func_call,
-                    None,
-                    lu_dog,
-                );
-
-                if position == 0 {
-                    s_write!(func_call).argument = Some(s_read!(arg).id);
-                }
-
-                last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
-            }
-
-            debug!(
-                "ParserExpression::FunctionCall exit {:?}",
-                (&func_call, s_read!(func_call).r28_argument(lu_dog))
-            );
-
-            debug!(
-                "return type {}",
-                PrintableValueType(true, &ret_ty, context, lu_dog).to_string()
-            );
-
-            Ok(((func, span), ret_ty))
+            function_call::inter(func, &args, span, block, context, import_stack, lu_dog)
         }
         //
         // GreaterThan: >
