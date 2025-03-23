@@ -17,6 +17,7 @@ pub(super) mod float_literal;
 pub(super) mod for_loop;
 pub(super) mod format_string;
 pub(super) mod function_call;
+pub(super) mod group;
 pub(super) mod gt;
 pub(super) mod gte;
 pub(super) mod integer_literal;

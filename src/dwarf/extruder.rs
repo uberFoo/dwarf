@@ -51,7 +51,7 @@ mod expression;
 use expression::{
     a_weight, addition, and, any_list, assignment, bang, block, boolean_literal, char_literal,
     debug as expr_debug, division, empty, equals, expr_as, field_access, float_literal, for_loop,
-    format_string, function_call, gt, gte, integer_literal, method_call, static_method_call,
+    format_string, function_call, group, gt, gte, integer_literal, method_call, static_method_call,
     string_literal, struct_expr, unit_enum,
 };
 
@@ -1194,16 +1194,8 @@ pub(super) fn inter_expression(
         //
         // Group
         //
-        ParserExpression::Group(ref expr) => {
-            let (expr, ty) = inter_expression(
-                &new_ref!(ParserExpression, expr.0.to_owned()),
-                &expr.1,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-            Ok((expr, ty))
+        ParserExpression::Group(expr) => {
+            group::inter(expr, span, block, context, import_stack, lu_dog)
         }
         //
         // Halt
