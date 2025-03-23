@@ -51,7 +51,7 @@ mod expression;
 use expression::{
     a_weight, addition, and, any_list, assignment, bang, block, boolean_literal, char_literal,
     debug as expr_debug, division, empty, equals, expr_as, field_access, float_literal, for_loop,
-    format_string, function_call, gt, integer_literal, method_call, static_method_call,
+    format_string, function_call, gt, gte, integer_literal, method_call, static_method_call,
     string_literal, struct_expr, unit_enum,
 };
 

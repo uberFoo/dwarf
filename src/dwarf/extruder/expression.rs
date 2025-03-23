@@ -18,6 +18,7 @@ pub(super) mod for_loop;
 pub(super) mod format_string;
 pub(super) mod function_call;
 pub(super) mod gt;
+pub(super) mod gte;
 pub(super) mod integer_literal;
 pub(super) mod method_call;
 pub(super) mod static_method_call;
