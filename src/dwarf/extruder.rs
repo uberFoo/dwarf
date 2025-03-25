@@ -28,7 +28,7 @@ use crate::{
     lu_dog::{
         store::ObjectStore as LuDogStore,
         types::{
-            AWait, Block, Body, BooleanOperator, Call, CharLiteral, EnumFieldEnum, Expression,
+            Block, Body, BooleanOperator, Call, CharLiteral, EnumFieldEnum, Expression,
             ExpressionBit, ExpressionEnum, ExpressionStatement, Field, ForLoop, FormatBit,
             FormatString, FuncGeneric, FunctionCall, HaltAndCatchFire, ImplementationBlock, Import,
             Index, IntegerLiteral, Item as WoogItem, ItemStatement, Lambda, LambdaParameter,
@@ -48,7 +48,12 @@ use crate::{
 };
 
 mod expression;
-use expression::{addition, and, expr_as, method_call, static_method_call, struct_expr, unit_enum};
+use expression::{
+    a_weight, addition, and, any_list, assignment, bang, block, boolean_literal, char_literal,
+    debug as expr_debug, division, empty, equals, expr_as, field_access, float_literal, for_loop,
+    format_string, function_call, group, gt, gte, halt, if_expr, index, integer_literal,
+    method_call, static_method_call, string_literal, struct_expr, unit_enum,
+};
 
 pub(super) const EXTENSION_DIR: &str = "extensions";
 pub(super) const JSON_EXT: &str = "json";
@@ -57,19 +62,6 @@ pub(super) const LIB_TAO: &str = "lib.ore";
 pub(super) const MODEL_DIR: &str = "models";
 pub(super) const SRC_DIR: &str = "src";
 pub(super) const ORE_EXT: &str = "ore";
-
-macro_rules! link_format_bits {
-    ($last:expr, $next:expr, $store:expr) => {{
-        let next = s_read!($next);
-        if let Some(last) = $last {
-            let last = $store.exhume_format_bit(&last).unwrap().clone();
-            let mut last = s_write!(last);
-            last.next = Some(next.id);
-        }
-
-        Some(next.id)
-    }};
-}
 
 macro_rules! link_ƛ_parameter {
     ($last:expr, $next:expr, $store:expr) => {{
@@ -136,6 +128,7 @@ macro_rules! link_list_element {
         Some(next.id)
     }};
 }
+pub(crate) use link_list_element;
 
 macro_rules! function {
     () => {{
@@ -1125,1155 +1118,114 @@ pub(super) fn inter_expression(
         ParserExpression::And(lhs_p, rhs_p) => {
             and::inter(lhs_p, rhs_p, span, block, context, import_stack, lu_dog)
         }
-        //
-        // AnyList
-        //
         ParserExpression::AnyList(ref elements) => {
-            debug!("anylist {:?}", elements);
-            if elements.is_empty() {
-                panic!("Just don't do this. It doesn't even merit an error.");
-            } else {
-                let mut elements = elements.iter();
-
-                let element = elements.next().unwrap();
-                let ((first, first_span), first_ty) = inter_expression(
-                    &new_ref!(ParserExpression, element.0.to_owned()),
-                    &element.1,
-                    block,
-                    context,
-                    import_stack,
-                    lu_dog,
-                )?;
-
-                let element = ListElement::new(0, &first, None, lu_dog);
-                let expr = Expression::new_list_element(true, &element, lu_dog);
-                let value = XValue::new_expression(block, &first_ty, &expr, lu_dog);
-
-                // We need to clone the span because it's already been used
-                // by the underlying value.
-                LuDogSpan::new(
-                    s_read!(first_span).end,
-                    s_read!(first_span).start,
-                    &context.source,
-                    None,
-                    Some(&value),
-                    lu_dog,
-                );
-
-               let list_expr = ListExpression::new(Some(&element),
-                   &ValueType::new_unknown(true, lu_dog), lu_dog);
-
-                let mut last_element_uuid: Option<SarzakStorePtr> = Some(s_read!(element).id);
-                let mut position = 1;
-                for element in elements {
-                    let ((elt, elt_span), elt_ty) = inter_expression(
-                        &new_ref!(ParserExpression, element.0.to_owned()),
-                        &element.1,
-                        block,
-                        context,
-                        import_stack,
-                        lu_dog,
-                    )?;
-
-                    let element = ListElement::new(position, &elt, None, lu_dog);
-                    position += 1;
-
-                    last_element_uuid = link_list_element!(last_element_uuid, element, lu_dog);
-                    let expr = Expression::new_list_element(true, &element, lu_dog);
-                    let value = XValue::new_expression(block, &elt_ty, &expr, lu_dog);
-                    LuDogSpan::new(
-                        s_read!(elt_span).end,
-                        s_read!(elt_span).start,
-                        &context.source,
-                        None,
-                        Some(&value),
-                        lu_dog,
-                    );
-                }
-
-                let expr = Expression::new_list_expression(true, &list_expr, lu_dog);
-                let ty = ValueType::new_any_list(true, lu_dog);
-                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                update_span_value(&span, &value, location!());
-
-                Ok(((expr, span), ty))
-            }
+            any_list::inter(elements, span, block, context, import_stack, lu_dog)
         }
         ParserExpression::As(expr, ref ty) => {
             expr_as::inter(expr, ty, span, block, context, import_stack, lu_dog)
         }
-        //
-        // Asm
-        //
-        // ParserExpression::Asm(ref exprs) => {
-        //     let mut exprs = exprs
-        //         .iter()
-        //         .map(|expr| {
-        //             inter_expression(
-        //                 &new_ref!(ParserExpression, expr.0.to_owned()),
-        //                 &expr.1,
-        //                 source,
-        //                 block,
-        //                 lu_dog,
-        //                 models,
-        //                 sarzak,
-        //             )
-        //         })
-        //         .collect::<Result<Vec<_>, _>>()?;
-
-        //     let static_method_call =
-        //         StaticMethodCall::new("execute_asm".to_owned(), "chacha".to_owned(), lu_dog);
-        //     //     &exprs
-        //     //         .iter()
-        //     //         .map(|expr| &expr.0)
-        //     //         .collect::<Vec<_>>()
-        //     //         .as_slice(),
-        //     //     lu_dog,
-        //     // );
-        // }
-        //
-        // Assignment
-        //
-        ParserExpression::Assignment(ref lhs_p, ref rhs_p) => {
-            let (lhs, lhs_ty) = inter_expression(
-                &new_ref!(ParserExpression, lhs_p.0.to_owned()),
-                &lhs_p.1,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-            let (rhs, rhs_ty) = inter_expression(
-                &new_ref!(ParserExpression, rhs_p.0.to_owned()),
-                &rhs_p.1,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-
-            typecheck(
-                (&lhs_ty, &lhs_p.1),
-                (&rhs_ty, &rhs_p.1),
-                location!(),
-                context,
-                lu_dog,
-            )?;
-
-            let expr = Binary::new_assignment(true, lu_dog);
-            let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
-            let expr = Expression::new_operator(true, &expr, lu_dog);
-
-            let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), lhs_ty))
+        ParserExpression::Assignment(lhs_p, rhs_p) => {
+            assignment::inter(lhs_p, rhs_p, span, block, context, import_stack, lu_dog)
         }
-        //
-        // Await
-        //
-        ParserExpression::Await(ref expr_p) => {
-            debug!("await: {expr_p:?}");
-
-            let (expr, ty) = inter_expression(
-                &new_ref!(ParserExpression, expr_p.0.to_owned()),
-                &expr_p.1,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-
-            if !matches!(s_read!(ty).subtype, ValueTypeEnum::XFuture(_)) {
-                let ty = PrintableValueType(true, &ty, context, lu_dog);
-                Err(vec![DwarfError::AwaitNotFuture {
-                    file: context.file_name.to_owned(),
-                    found: ty.to_string(),
-                    span: expr_p.1.clone(),
-                    program: context.source_string.to_owned(),
-                }])
-            } else {
-                let future = match s_read!(ty).subtype {
-                    ValueTypeEnum::XFuture(ref id) => lu_dog.exhume_x_future(id).unwrap(),
-                    _ => unreachable!(),
-                };
-                let ty = s_read!(future).r2_value_type(lu_dog)[0].clone();
-                let expr = AWait::new(&expr.0, lu_dog);
-                let expr = Expression::new_a_wait(true, &expr, lu_dog);
-                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                update_span_value(&span, &value, location!());
-
-                Ok(((expr, span), ty))
-            }
-            // }
+        ParserExpression::Await(expr_p) => {
+            a_weight::inter(expr_p, span, block, context, import_stack, lu_dog)
         }
-        //
-        // Bang
-        //
         ParserExpression::Bang(expr) => {
-            let (expr, ty) = inter_expression(
-                &new_ref!(ParserExpression, expr.0.to_owned()),
-                &expr.1,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-            let not = Unary::new_not(true, lu_dog);
-            let operator = Operator::new_unary(&expr.0, None, &not, lu_dog);
-            let expr = Expression::new_operator(true, &operator, lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), ty))
+            bang::inter(expr, span, block, context, import_stack, lu_dog)
         }
-        //
-        // Block
-        //
         ParserExpression::Block(a_sink, ref stmts, vars, tys) => {
-            let sync = match a_sink {
-                BlockType::Async => false,
-                BlockType::Sync => true,
-            };
-            let block = Block::new(!sync, Uuid::new_v4(), Some(block), None, lu_dog);
-
-            for (var, ty) in vars.into_iter().zip(tys.into_iter()) {
-                let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
-                let var = Variable::new_local_variable(var, &local, lu_dog);
-                debug!("variable {var:?}");
-                let value = XValue::new_variable(&block, &ty.0, &var, lu_dog);
-                // 🚧 We should really be passing a span in the Block so that
-                // we can link this XValue to it.
-            }
-
-            // let block = create_block::<P>(None, lu_dog)?;
-            debug!("block {block:?}");
-            let stmts_vec: Vec<RefType<ParserStatement>> = stmts
-                .iter()
-                .map(|stmt| new_ref!(ParserStatement, stmt.0.to_owned()))
-                .collect();
-            // 🚧 The one that's commented out is correct -- assuming the block
-            // isn't `{}`. The one that isn't commented out _should_ be right,
-            // but I'm not sure that it is.
-            // let stmts_span = stmts.iter().map(|stmt| stmt.1.start).min().unwrap()
-            //     ..stmts.iter().map(|stmt| stmt.1.end).max().unwrap();
-            let stmts_span = s_read!(span).start as usize..s_read!(span).end as usize;
-
-            let expr = Expression::new_block(true, &block, lu_dog);
-            let ty = inter_statements(
-                &stmts_vec,
-                &stmts_span,
-                &block,
+            block::inter(
+                a_sink,
+                stmts,
+                vars,
+                tys,
+                span,
+                block,
                 context,
                 import_stack,
                 lu_dog,
-            )?;
-            let value = XValue::new_expression(&block, &ty.0, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            // If it's an async block then wrap it in a future.
-            let ty = match a_sink {
-                BlockType::Async => {
-                    let span = ty.1;
-                    let future = XFuture::new(&ty.0, lu_dog);
-                    (ValueType::new_x_future(true, &future, lu_dog), span)
-                }
-                BlockType::Sync => ty,
-            };
-
-            debug!("block {expr:?}");
-            Ok(((expr, span), ty.0))
+            )
         }
-        //
-        // BooleanLiteral
-        //
         ParserExpression::BooleanLiteral(literal) => {
-            let literal = if literal {
-                BooleanLiteral::new_true_literal(true, lu_dog)
-            } else {
-                BooleanLiteral::new_false_literal(true, lu_dog)
-            };
-            let expr = Expression::new_literal(
-                true,
-                &Literal::new_boolean_literal(true, &literal, lu_dog),
-                lu_dog,
-            );
-            let ty = ValueType::new_ty(true, &Ty::new_boolean(context.sarzak), lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), ty))
+            boolean_literal::inter(literal, span, block, context, lu_dog)
         }
-        //
-        // CharLiteral
-        //
         ParserExpression::CharLiteral(literal) => {
-            let literal = CharLiteral::new(literal, lu_dog);
-            let expr = Expression::new_literal(
-                true,
-                &Literal::new_char_literal(true, &literal, lu_dog),
-                lu_dog,
-            );
-            let ty = ValueType::new_char(true, lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), ty))
+            char_literal::inter(literal, span, block, lu_dog)
         }
-        //
-        // Debug
-        //
         ParserExpression::Debug => {
-            let expr = Expression::new_x_debugger(true, lu_dog);
-            let ty = ValueType::new_empty(true, lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), ty))
+            expr_debug::inter(span, block, lu_dog)
         }
-        //
-        // Division
-        //
-        ParserExpression::Division(ref lhs_p, ref rhs_p) => {
-            let (lhs, lhs_ty) = inter_expression(
-                &new_ref!(ParserExpression, lhs_p.0.to_owned()),
-                &lhs_p.1,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-            let (rhs, rhs_ty) = inter_expression(
-                &new_ref!(ParserExpression, rhs_p.0.to_owned()),
-                &rhs_p.1,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-
-            // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
-            // 🚧                        THIS IS SUPER IMPORTANT!
-            // 🚧
-            // 🚧 We also need to check that the type supports division.
-            // 🚧
-            // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
-
-            typecheck(
-                (&lhs_ty, &lhs_p.1),
-                (&rhs_ty, &rhs_p.1),
-                location!(),
-                context,
-                lu_dog,
-            )?;
-
-            let expr = Binary::new_division(true, lu_dog);
-            let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
-            let expr = Expression::new_operator(true, &expr, lu_dog);
-
-            let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), lhs_ty))
+        ParserExpression::Division(lhs_p, rhs_p) => {
+            division::inter(lhs_p, rhs_p, span, block, context, import_stack, lu_dog)
         }
-        //
-        // Empty
-        //
         ParserExpression::Empty => {
-            let expr = Expression::new_empty_expression(true, lu_dog);
-            let ty = ValueType::new_empty(true, lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), ty))
+            empty::inter(span, block, lu_dog)
         }
-        //
-        // Equals
-        //
-        ParserExpression::Equals(ref lhs_p, ref rhs_p) => {
-            debug!("ParserExpression::Equals lhs {:?}", lhs_p);
-            debug!("ParserExpression::Equals rhs {:?}", rhs_p);
-
-            let (lhs, lhs_ty) = inter_expression(
-                &new_ref!(ParserExpression, lhs_p.0.to_owned()),
-                &lhs_p.1,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-            let (rhs, rhs_ty) = inter_expression(
-                &new_ref!(ParserExpression, rhs_p.0.to_owned()),
-                &rhs_p.1,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-
-            typecheck(
-                (&lhs_ty, &lhs_p.1),
-                (&rhs_ty, &rhs_p.1),
-                location!(),
-                context,
-                lu_dog,
-            )?;
-
-            let expr = Comparison::new_equal(true, lu_dog);
-            let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
-            let expr = Expression::new_operator(true, &expr, lu_dog);
-
-            let ty = Ty::new_boolean(context.sarzak);
-            let ty = ValueType::new_ty(true, &ty, lu_dog);
-
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), ty))
+        ParserExpression::Equals(lhs_p, rhs_p) => {
+            equals::inter(lhs_p, rhs_p, span, block, context, import_stack, lu_dog)
         }
-        //
-        // FieldAccess
-        //
         ParserExpression::FieldAccess(lhs, rhs) => {
-            debug!("ParserExpression::FieldAccess lhs {:?}", lhs);
-            debug!("ParserExpression::FieldAccess rhs {:?}", rhs);
-
-            let (lhs, lhs_ty) = inter_expression(
-                &new_ref!(ParserExpression, lhs.0.clone()),
-                &lhs.1,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-
-            let id = s_read!(lhs_ty).id;
-            let ty = lu_dog.exhume_value_type(&id).unwrap();
-            let ty_read = s_read!(ty);
-
-            match &ty_read.subtype {
-                // We matched on the lhs type.
-                ValueTypeEnum::Function(ref _id) => Ok((lhs, ty.clone())),
-                ValueTypeEnum::WoogStruct(ref id) => {
-                    let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
-                    let fields = s_read!(woog_struct).r7_field(lu_dog);
-                    let field = fields.iter().find(|f| s_read!(f).name == rhs.0);
-
-                    if let Some(field) = field {
-                        let field = lu_dog.exhume_field(&s_read!(field).id);
-                        let func = if let Some(impl_) =
-                            s_read!(woog_struct).r8c_implementation_block(lu_dog).pop()
-                        {
-                            let funcs = s_read!(impl_).r9_function(lu_dog);
-                            funcs.iter().find(|f| s_read!(f).name == rhs.0).cloned()
-                        } else {
-                            None
-                        };
-
-                        debug!("field {:?}", field);
-                        debug!("func {:?}", func);
-
-                        // We need to grab the type from the field: what we have above is the type
-                        // of the struct.
-                        if let Some(field) = field {
-                            let fat = FieldAccessTarget::new_field(true, &field, lu_dog);
-                            let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
-                            let expr = Expression::new_field_access(true, &expr, lu_dog);
-                            let ty = s_read!(field).r5_value_type(lu_dog)[0].clone();
-                            let value = XValue::new_expression(block,  &ty, &expr, lu_dog);
-                            update_span_value(&span, &value, location!());
-
-                            Ok(((expr, span), ty))
-                        } else if let Some(func) = func {
-                            let fat = FieldAccessTarget::new_function(true, &func, lu_dog);
-                            let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
-                            let expr = Expression::new_field_access(true, &expr, lu_dog);
-                            let ty = s_read!(func).r10_value_type(lu_dog)[0].clone();
-                            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                            update_span_value(&span, &value, location!());
-
-                            Ok(((expr, span), ty))
-                        } else {
-                            let span = s_read!(span);
-                            let span = span.start as usize..span.end as usize;
-                            Err(vec![DwarfError::StructFieldNotFound {
-                                field: rhs.0.clone(),
-                                file: context.file_name.to_owned(),
-                                span,
-                                location: location!(),
-                                program: context.source_string.to_owned(),
-                            }])
-                        }
-                    } else {
-                        Err(vec![DwarfError::StructFieldNotFound {
-                            field: rhs.0.clone(),
-                            file: context.file_name.to_owned(),
-                            span: rhs.1.to_owned(),
-                            location: location!(),
-                            program: context.source_string.to_owned(),
-                        }])
-                    }
-                }
-                ValueTypeEnum::Ty(id) => {
-                    debug!("FieldAccess: ValueTypeEnum::Ty() {:?}", id);
-                    let ty = context.sarzak.exhume_ty(id).unwrap();
-                    let ty = ty.read().unwrap();
-                    match *ty {
-                        Ty::Object(id) => {
-                            // We get here for objects imported from a plug-in.
-                            let woog_struct = lu_dog
-                                .iter_woog_struct()
-                                .inspect(|ref ws| {
-                                    debug!("{ws:?}");
-                                })
-                                .find(|ws| s_read!(ws).object == Some(id))
-                                .unwrap();
-
-                            if let Some(field) = lu_dog.exhume_field_id_by_name(&rhs.0) {
-                                let field = lu_dog.exhume_field(&field);
-                                let func = if let Some(impl_) =
-                                    s_read!(woog_struct).r8c_implementation_block(lu_dog).pop()
-                                {
-                                    let funcs = s_read!(impl_).r9_function(lu_dog);
-                                    funcs.iter().find(|f| s_read!(f).name == rhs.0).cloned()
-                                } else {
-                                    None
-                                };
-
-                                // We need to grab the type from the field: what we have above is the type
-                                // of the struct.
-                                if let Some(field) = field {
-                                    let fat = FieldAccessTarget::new_field(true, &field, lu_dog);
-                                    let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
-                                    let expr = Expression::new_field_access(true, &expr, lu_dog);
-                                    let ty = s_read!(field).r5_value_type(lu_dog)[0].clone();
-                                    let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                                    update_span_value(&span, &value, location!());
-
-                                    Ok(((expr, span), ty))
-                                } else if let Some(func) = func {
-                                    let fat = FieldAccessTarget::new_function(true, &func, lu_dog);
-                                    let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
-                                    let expr = Expression::new_field_access(true, &expr, lu_dog);
-                                    let ty = s_read!(func).r10_value_type(lu_dog)[0].clone();
-                                    let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                                    update_span_value(&span, &value, location!());
-
-                                    Ok(((expr, span), ty))
-                                } else {
-                                    let span = s_read!(span);
-                                    let span = span.start as usize..span.end as usize;
-                                    Err(vec![DwarfError::StructFieldNotFound {
-                                        field: rhs.0.clone(),
-                                        file: context.file_name.to_owned(),
-                                        span,
-                                        location: location!(),
-                                        program: context.source_string.to_owned(),
-                                    }])
-                                }
-                            } else {
-                                Err(vec![DwarfError::StructFieldNotFound {
-                                    field: rhs.0.clone(),
-                                    file: context.file_name.to_owned(),
-                                    span: rhs.1.to_owned(),
-                                    location: location!(),
-                                    program: context.source_string.to_owned(),
-                                }])
-                            }
-                        }
-                        _ => {
-                            debug!("returning lhs");
-                            Ok((lhs, lhs_ty))
-                        }
-                    }
-                }
-                ValueTypeEnum::ZObjectStore(ref id) => {
-                    let store = lu_dog.exhume_z_object_store(id).unwrap();
-                    let name = &s_read!(store).name;
-                    let id = lu_dog.exhume_woog_struct_id_by_name(name).unwrap();
-                    let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
-                    let fields = s_read!(woog_struct).r7_field(lu_dog);
-                    let field = fields.iter().find(|f| s_read!(f).name == rhs.0);
-
-                    if let Some(field) = field {
-                        let field = lu_dog.exhume_field(&s_read!(field).id);
-                        let func = if let Some(impl_) =
-                            s_read!(woog_struct).r8c_implementation_block(lu_dog).pop()
-                        {
-                            let funcs = s_read!(impl_).r9_function(lu_dog);
-                            funcs.iter().find(|f| s_read!(f).name == rhs.0).cloned()
-                        } else {
-                            None
-                        };
-
-                        debug!("field {:?}", field);
-                        debug!("func {:?}", func);
-
-                        // We need to grab the type from the field: what we have above is the type
-                        // of the struct.
-                        if let Some(field) = field {
-                            let fat = FieldAccessTarget::new_field(true, &field, lu_dog);
-                            let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
-                            let expr = Expression::new_field_access(true, &expr, lu_dog);
-                            let ty = s_read!(field).r5_value_type(lu_dog)[0].clone();
-                            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                            update_span_value(&span, &value, location!());
-
-                            Ok(((expr, span), ty))
-                        } else if let Some(func) = func {
-                            let fat = FieldAccessTarget::new_function(true, &func, lu_dog);
-                            let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
-                            let expr = Expression::new_field_access(true, &expr, lu_dog);
-                            let ty = s_read!(func).r10_value_type(lu_dog)[0].clone();
-                            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                            update_span_value(&span, &value, location!());
-
-                            Ok(((expr, span), ty))
-                        } else {
-                            let span = s_read!(span);
-                            let span = span.start as usize..span.end as usize;
-                            Err(vec![DwarfError::StructFieldNotFound {
-                                field: rhs.0.clone(),
-                                file: context.file_name.to_owned(),
-                                span,
-                                location: location!(),
-                                program: context.source_string.to_owned(),
-                            }])
-                        }
-                    } else {
-                        Err(vec![DwarfError::StructFieldNotFound {
-                            field: rhs.0.clone(),
-                            file: context.file_name.to_owned(),
-                            span: rhs.1.to_owned(),
-                            location: location!(),
-                            program: context.source_string.to_owned(),
-                        }])
-                    }
-                }
-                what => {
-                    dbg!(&what);
-                    Err(vec![DwarfError::NotAStruct {
-                    file: context.file_name.to_owned(),
-                    span: rhs.1.to_owned(),
-                    ty: PrintableValueType(true, &ty, context, lu_dog).to_string(),
-                    program: context.source_string.to_owned(),
-                }])},
-            }
+            field_access::inter(lhs, rhs, span, block, context, import_stack, lu_dog)
         }
-        //
-        // FloatLiteral
-        //
         ParserExpression::FloatLiteral(literal) => {
-            let expr = Expression::new_literal(
-                true,
-                &Literal::new_float_literal(true, &FloatLiteral::new(literal, lu_dog), lu_dog),
-                lu_dog,
-            );
-            let ty = ValueType::new_ty(true, &Ty::new_float(context.sarzak), lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), ty))
+            float_literal::inter(literal, span, block, context, lu_dog)
         }
-        //
-        // For Loop
-        //
         ParserExpression::For(iter, collection, body) => {
-            debug!("For");
-
-            let cspan = &collection.1;
-            let collection = new_ref!(ParserExpression, collection.0.clone());
-
-            let (collection, collection_ty) =
-                inter_expression(&collection, cspan, block, context, import_stack, lu_dog)?;
-
-            let collection_ty = match s_read!(collection_ty).subtype {
-                ValueTypeEnum::List(ref id) => {
-                    let list = lu_dog.exhume_list(id).unwrap();
-                    let list = s_read!(list);
-                    list.r36_value_type(lu_dog)[0].clone()
-                }
-                ValueTypeEnum::Range(_) => {
-                    // 🚧  I'm punting here. I think range can be something other than an int.
-                    // For example, what if you wanted a..f? I need to think about this, and
-                    // check what rust does. I'm actually too tired right now to think about
-                    // it. Related to range_type_bug.
-                    // 🚧 Of course rust does not work on chars. Doesn't mean I don't want to.
-                    ValueType::new_ty(true, &Ty::new_integer(context.sarzak), lu_dog)
-                }
-                ValueTypeEnum::Ty(ref id) => {
-                    let ty = context.sarzak.exhume_ty(id).unwrap();
-                    let ty = ty.read().unwrap();
-                    match &*ty {
-                        Ty::ZString(_) => ValueType::new_char(true, lu_dog),
-                        _ => {
-                            let ty = PrintableValueType(true, &collection_ty, context, lu_dog)
-                                .to_string();
-                            return Err(vec![DwarfError::NotAList {
-                                file: context.file_name.to_owned(),
-                                span: cspan.to_owned(),
-                                ty,
-                                location: location!(),
-                                program: context.source_string.to_owned(),
-                            }]);
-                        }
-                    }
-                }
-                _ => {
-                    let ty = PrintableValueType(true, &collection_ty, context, lu_dog).to_string();
-                    return Err(vec![DwarfError::NotAList {
-                        file: context.file_name.to_owned(),
-                        span: cspan.to_owned(),
-                        ty,
-                        location: location!(),
-                        program: context.source_string.to_owned(),
-                    }]);
-                }
-            };
-
-            let bspan = &body.1;
-            let body = match &body.0 {
-                ParserExpression::Block(a_sink, body, vars, tys)
-                    if vars.is_empty() && tys.is_empty() =>
-                {
-                    ParserExpression::Block(
-                        a_sink.to_owned(),
-                        body.to_owned(),
-                        vec![iter.0.to_owned()],
-                        vec![WrappedValueType(collection_ty)],
-                    )
-                }
-                _ => unreachable!(),
-            };
-            let body = new_ref!(ParserExpression, body.to_owned());
-
-            let ((body, _), _body_ty) =
-                inter_expression(&body, bspan, block, context, import_stack, lu_dog)?;
-
-            // I think that the model should be changed so that the For Loop takes
-            // an Expression rather than a Body.
-            let for_loop = ForLoop::new(iter.0.to_owned(), &body, &collection.0, lu_dog);
-            let expr = Expression::new_for_loop(true, &for_loop, lu_dog);
-            let ty = ValueType::new_empty(true, lu_dog);
-
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), ty))
+            for_loop::inter(iter, collection, body, span, block, context, import_stack, lu_dog)
         }
-        //
-        // FormatString
-        //
         ParserExpression::FormatString(bits) => {
-            let format_string = FormatString::new(None, lu_dog);
-            let literal = Literal::new_format_string(true, &format_string, lu_dog);
-            let expr = Expression::new_literal(true, &literal, lu_dog);
-            let ty = ValueType::new_ty(true, &Ty::new_z_string(context.sarzak), lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            let mut last_format_bit_uuid: Option<SarzakStorePtr> = None;
-            for (bit, span) in bits {
-                let ((expr, _), _) = inter_expression(
-                    &new_ref!(ParserExpression, bit.to_owned()),
-                    &span,
-                    block,
-                    context,
-                    import_stack,
-                    lu_dog,
-                )?;
-
-                let expr_bit = ExpressionBit::new(&expr, lu_dog);
-                let format_bit =
-                    FormatBit::new_expression_bit(&format_string, None, &expr_bit, lu_dog);
-
-                if last_format_bit_uuid.is_none() {
-                    s_write!(format_string).first_format_bit = Some(s_read!(format_bit).id);
-                }
-                last_format_bit_uuid = link_format_bits!(last_format_bit_uuid, format_bit, lu_dog);
-            }
-
-            Ok(((expr, span), ty))
+            format_string::inter(&bits, span, block, context, import_stack, lu_dog)
         }
-        //
-        // FunctionCall
-        //
         ParserExpression::FunctionCall(func, args) => {
-            debug!("func {func:?}");
-            let fspan = &func.1;
-            let func = &func.0;
-            debug!("args {args:?}");
-
-            let (func_expr, ret_ty) = inter_expression(
-                &new_ref!(ParserExpression, func.to_owned()),
-                fspan,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-            debug!("func_expr {func_expr:?}");
-
-            let ret_ty = if let ValueTypeEnum::Lambda(ref l) = s_read!(ret_ty).subtype {
-                let l = lu_dog.exhume_lambda(l).unwrap();
-                let ret_ty = s_read!(l).return_type.clone();
-                let ret_ty = lu_dog.exhume_value_type(&ret_ty).unwrap();
-                ret_ty
-            } else {
-                ret_ty.clone()
-            };
-
-            let name = match func {
-                ParserExpression::LocalVariable(name) => name,
-                _ => "not-a-local-variable",
-            };
-
-            let func_call = FunctionCall::new(name.to_owned(), lu_dog);
-            let func_call =
-                Call::new_function_call(true, None, Some(&func_expr.0), &func_call, lu_dog);
-            let func = Expression::new_call(true, &func_call, lu_dog);
-            let value = XValue::new_expression(block, &ret_ty, &func, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            let mut last_arg_uuid: Option<SarzakStorePtr> = None;
-            // Note that position makes each arg unique. I don't remember if
-            // that is the explicit intention or not.
-            for (position, arg) in args.iter().enumerate() {
-                let (arg_expr, _ty) = inter_expression(
-                    &new_ref!(ParserExpression, arg.0.to_owned()),
-                    &arg.1,
-                    block,
-                    context,
-                    import_stack,
-                    lu_dog,
-                )?;
-                let arg = Argument::new(
-                    position as DwarfInteger,
-                    &arg_expr.0,
-                    &func_call,
-                    None,
-                    lu_dog,
-                );
-
-                if position == 0 {
-                    s_write!(func_call).argument = Some(s_read!(arg).id);
-                }
-
-                last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
-            }
-
-            debug!(
-                "ParserExpression::FunctionCall exit {:?}",
-                (&func_call, s_read!(func_call).r28_argument(lu_dog))
-            );
-
-            debug!(
-                "return type {}",
-                PrintableValueType(true, &ret_ty, context, lu_dog).to_string()
-            );
-
-            Ok(((func, span), ret_ty))
+            function_call::inter(func, &args, span, block, context, import_stack, lu_dog)
         }
         //
         // GreaterThan: >
         //
-        ParserExpression::GreaterThan(ref lhs_p, ref rhs_p) => {
-            let (lhs, lhs_ty) = inter_expression(
-                &new_ref!(ParserExpression, lhs_p.0.to_owned()),
-                &lhs_p.1,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-            let (rhs, rhs_ty) = inter_expression(
-                &new_ref!(ParserExpression, rhs_p.0.to_owned()),
-                &rhs_p.1,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-
-            // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
-            // 🚧                        THIS IS SUPER IMPORTANT!
-            // 🚧
-            // 🚧 We need to check the types of the LHS and RHS to make sure that they are the same,
-            // 🚧 or at least compatible. Need to look into rust rules.
-            // 🚧 We also need to check that the types implement PartialEq, and whatever else...
-            // 🚧
-            // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
-
-            typecheck(
-                (&lhs_ty, &lhs_p.1),
-                (&rhs_ty, &rhs_p.1),
-                location!(),
-                context,
-                lu_dog,
-            )?;
-
-            let expr = Comparison::new_greater_than(true, lu_dog);
-            let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
-            let expr = Expression::new_operator(true, &expr, lu_dog);
-
-            let ty = Ty::new_boolean(context.sarzak);
-            let ty = ValueType::new_ty(true, &ty, lu_dog);
-
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), ty))
+        ParserExpression::GreaterThan(lhs, rhs) => {
+            gt::inter(lhs, rhs, span, block, context, import_stack, lu_dog)
         }
         //
         // GreaterThanOrEqual: >=
         //
-        ParserExpression::GreaterThanOrEqual(ref lhs_p, ref rhs_p) => {
-            let (lhs, lhs_ty) = inter_expression(
-                &new_ref!(ParserExpression, lhs_p.0.to_owned()),
-                &lhs_p.1,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-            let (rhs, rhs_ty) = inter_expression(
-                &new_ref!(ParserExpression, rhs_p.0.to_owned()),
-                &rhs_p.1,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-
-            // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
-            // 🚧                        THIS IS SUPER IMPORTANT!
-            // 🚧
-            // 🚧 We need to check the types of the LHS and RHS to make sure that they are the same,
-            // 🚧 or at least compatible. Need to look into rust rules.
-            // 🚧 We also need to check that the types implement PartialEq, and whatever else...
-            // 🚧
-            // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
-
-            typecheck(
-                (&lhs_ty, &lhs_p.1),
-                (&rhs_ty, &rhs_p.1),
-                location!(),
-                context,
-                lu_dog,
-            )?;
-
-            let expr = Comparison::new_greater_than_or_equal(true, lu_dog);
-            let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
-            let expr = Expression::new_operator(true, &expr, lu_dog);
-
-            let ty = Ty::new_boolean(context.sarzak);
-            let ty = ValueType::new_ty(true, &ty, lu_dog);
-
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), ty))
+        ParserExpression::GreaterThanOrEqual(lhs, rhs) => {
+            gte::inter(lhs, rhs, span, block, context, import_stack, lu_dog)
         }
         //
         // Group
         //
-        ParserExpression::Group(ref expr) => {
-            let (expr, ty) = inter_expression(
-                &new_ref!(ParserExpression, expr.0.to_owned()),
-                &expr.1,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-            Ok((expr, ty))
+        ParserExpression::Group(expr) => {
+            group::inter(expr, block, context, import_stack, lu_dog)
         }
         //
         // Halt
         //
         ParserExpression::Halt(expr) => {
-            let (expr, _ty) = inter_expression(
-                &new_ref!(ParserExpression, expr.0.to_owned()),
-                &expr.1,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-            let ty = ValueType::new_empty(true, lu_dog);
-            let halt = HaltAndCatchFire::new(&expr.0, lu_dog);
-            let expr = Expression::new_halt_and_catch_fire(true, &halt, lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), ty))
+            halt::inter(expr, span, block, context, import_stack, lu_dog)
         }
         //
         // If
         //
         ParserExpression::If(conditional, true_block, false_block) => {
-            debug!("conditional {:?}", conditional);
-            let cspan = &conditional.1;
-            let conditional = new_ref!(ParserExpression, conditional.0.to_owned());
-            let (conditional, conditional_ty) =
-                inter_expression(&conditional, cspan, block, context, import_stack, lu_dog)?;
-            debug!("ParserExpression::If {:?}", conditional_ty);
-
-            // Check that the conditional expression evaluates to a boolean.
-            // Note that this first check is necessary to unwrap the sarzak type
-            // from the lu_dog type.
-            if let ValueTypeEnum::Ty(ref ty) = s_read!(conditional_ty).subtype {
-                let s_ty = context.sarzak.exhume_ty(ty).unwrap();
-                let s_ty = s_ty.read().unwrap();
-                if let Ty::Boolean(_) = &*s_ty {
-                    // Good Times.
-                } else {
-                    let bty = ValueType::new_ty(true, &Ty::new_boolean(context.sarzak), lu_dog);
-                    let bty = PrintableValueType(true, &bty, context, lu_dog);
-                    let ty = PrintableValueType(true, &conditional_ty, context, lu_dog);
-                    return Err(vec![DwarfError::TypeMismatch {
-                        expected: bty.to_string(),
-                        found: ty.to_string(),
-                        file: context.file_name.to_owned(),
-                        expected_span: cspan.to_owned(),
-                        found_span: cspan.to_owned(),
-                        location: location!(),
-                        program: context.source_string.to_owned(),
-                    }]);
-                }
-            } else {
-                let bty = ValueType::new_ty(true, &Ty::new_boolean(context.sarzak), lu_dog);
-                let bty = PrintableValueType(true, &bty, context, lu_dog);
-                let ty = PrintableValueType(true, &conditional_ty, context, lu_dog);
-                return Err(vec![DwarfError::TypeMismatch {
-                    expected: bty.to_string(),
-                    found: ty.to_string(),
-                    file: context.file_name.to_owned(),
-                    expected_span: cspan.to_owned(),
-                    found_span: cspan.to_owned(),
-                    location: location!(),
-                    program: context.source_string.to_owned(),
-                }]);
-            }
-
-            let tspan = &true_block.1;
-            let true_block = new_ref!(ParserExpression, true_block.0.to_owned());
-            let (true_block, true_ty) =
-                inter_expression(&true_block, tspan, block, context, import_stack, lu_dog)?;
-            let true_block =
-                if let ExpressionEnum::Block(true_block) = s_read!(true_block.0).subtype {
-                    true_block
-                } else {
-                    panic!("Expected a block expression");
-                };
-            let true_block = lu_dog.exhume_block(&true_block).unwrap();
-
-            let false_block = if let Some(false_block) = false_block {
-                let fspan = &false_block.1;
-                let false_block = new_ref!(ParserExpression, false_block.0.to_owned());
-                let (false_block, _false_ty) =
-                    inter_expression(&false_block, fspan, block, context, import_stack, lu_dog)?;
-                Some(false_block.0)
-            } else {
-                None
-            };
-
-            let if_expr = XIf::new(false_block.as_ref(), &conditional.0, &true_block, lu_dog);
-            let expr = Expression::new_x_if(true, &if_expr, lu_dog);
-
-            let ty = true_ty;
-
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), ty))
+            if_expr::inter(
+                conditional,
+                true_block,
+                false_block,
+                span,
+                block,
+                context,
+                import_stack,
+                lu_dog,
+            )
         }
         //
         // Index
         //
-        ParserExpression::Index(target_p, index_p) => {
-            debug!("index {target_p:?}, {index_p:?}");
-            let (target, target_ty) = inter_expression(
-                &new_ref!(ParserExpression, target_p.0.to_owned()),
-                &target_p.1,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-            debug!("target: {target:?}, ty: {target_ty:?}");
-            let (index, index_ty) = inter_expression(
-                &new_ref!(ParserExpression, index_p.0.to_owned()),
-                &index_p.1,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-
-            let int_ty = ValueType::new_ty(true, &Ty::new_integer(context.sarzak), lu_dog);
-
-            let index_span = s_read!(index.1).start as usize..s_read!(index.1).end as usize;
-            typecheck(
-                (&int_ty, &index_span),
-                (&index_ty, &index_p.1),
-                location!(),
-                context,
-                lu_dog,
-            )?;
-
-            // We need to dereference the list and return the underlying type.
-            let target_ty = if let ValueTypeEnum::List(ref ty) = s_read!(target_ty).subtype {
-                let list = lu_dog.exhume_list(ty).unwrap();
-                let ty = &s_read!(list).r36_value_type(lu_dog)[0];
-                ty.clone()
-            } else if let ValueTypeEnum::Ty(ref ty) = s_read!(target_ty).subtype {
-                let ty = context.sarzak.exhume_ty(ty).unwrap();
-                let ty = ty.read().unwrap();
-                if let Ty::ZString(_) = &*ty {
-                    ValueType::new_char(true, lu_dog)
-                } else {
-                    let ty = PrintableValueType(true, &target_ty, context, lu_dog).to_string();
-                    return Err(vec![DwarfError::NotAList {
-                        file: context.file_name.to_owned(),
-                        span: target_p.1.clone(),
-                        ty,
-                        location: location!(),
-                        program: context.source_string.to_owned(),
-                    }]);
-                }
-            } else {
-                let ty = PrintableValueType(true, &target_ty, context, lu_dog).to_string();
-                return Err(vec![DwarfError::NotAList {
-                    file: context.file_name.to_owned(),
-                    span: target_p.1.clone(),
-                    ty,
-                    location: location!(),
-                    program: context.source_string.to_owned(),
-                }]);
-            };
-
-            let index = Index::new(&index.0, &target.0, lu_dog);
-            let expr = Expression::new_index(true, &index, lu_dog);
-            let value = XValue::new_expression(block, &target_ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), target_ty))
+        ParserExpression::Index(target, index) => {
+            index::inter(target, index, span, block, context, import_stack, lu_dog)
         }
-        //
-        // IntegerLiteral
-        //
         ParserExpression::IntegerLiteral(literal) => {
-            let expr = Expression::new_literal(
-                true,
-                &Literal::new_integer_literal(true, &IntegerLiteral::new(literal, lu_dog), lu_dog),
-                lu_dog,
-            );
-            let ty = ValueType::new_ty(true, &Ty::new_integer(context.sarzak), lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), ty))
+            integer_literal::inter(literal, span, block, context, lu_dog)
         }
         //
         // Lambda
@@ -3323,25 +2275,8 @@ pub(super) fn inter_expression(
                 lu_dog,
             )
         }
-        //
-        // StringLiteral
-        //
         ParserExpression::StringLiteral(literal) => {
-            debug!("literal {:?}", literal);
-            let expr = Expression::new_literal(
-                true,
-                &Literal::new_string_literal(
-                    true,
-                    &StringLiteral::new(literal.to_owned(), lu_dog),
-                    lu_dog,
-                ),
-                lu_dog,
-            );
-            let ty = ValueType::new_ty(true, &Ty::new_z_string(context.sarzak), lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), ty))
+            string_literal::inter(literal, span, block, context, lu_dog)
         }
         //
         // Struct
