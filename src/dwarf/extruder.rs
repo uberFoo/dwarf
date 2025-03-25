@@ -51,8 +51,8 @@ mod expression;
 use expression::{
     a_weight, addition, and, any_list, assignment, bang, block, boolean_literal, char_literal,
     debug as expr_debug, division, empty, equals, expr_as, field_access, float_literal, for_loop,
-    format_string, function_call, group, gt, gte, halt, if_expr, integer_literal, method_call,
-    static_method_call, string_literal, struct_expr, unit_enum,
+    format_string, function_call, group, gt, gte, halt, if_expr, index, integer_literal,
+    method_call, static_method_call, string_literal, struct_expr, unit_enum,
 };
 
 pub(super) const EXTENSION_DIR: &str = "extensions";
@@ -1221,74 +1221,8 @@ pub(super) fn inter_expression(
         //
         // Index
         //
-        ParserExpression::Index(target_p, index_p) => {
-            debug!("index {target_p:?}, {index_p:?}");
-            let (target, target_ty) = inter_expression(
-                &new_ref!(ParserExpression, target_p.0.to_owned()),
-                &target_p.1,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-            debug!("target: {target:?}, ty: {target_ty:?}");
-            let (index, index_ty) = inter_expression(
-                &new_ref!(ParserExpression, index_p.0.to_owned()),
-                &index_p.1,
-                block,
-                context,
-                import_stack,
-                lu_dog,
-            )?;
-
-            let int_ty = ValueType::new_ty(true, &Ty::new_integer(context.sarzak), lu_dog);
-
-            let index_span = s_read!(index.1).start as usize..s_read!(index.1).end as usize;
-            typecheck(
-                (&int_ty, &index_span),
-                (&index_ty, &index_p.1),
-                location!(),
-                context,
-                lu_dog,
-            )?;
-
-            // We need to dereference the list and return the underlying type.
-            let target_ty = if let ValueTypeEnum::List(ref ty) = s_read!(target_ty).subtype {
-                let list = lu_dog.exhume_list(ty).unwrap();
-                let ty = &s_read!(list).r36_value_type(lu_dog)[0];
-                ty.clone()
-            } else if let ValueTypeEnum::Ty(ref ty) = s_read!(target_ty).subtype {
-                let ty = context.sarzak.exhume_ty(ty).unwrap();
-                let ty = ty.read().unwrap();
-                if let Ty::ZString(_) = &*ty {
-                    ValueType::new_char(true, lu_dog)
-                } else {
-                    let ty = PrintableValueType(true, &target_ty, context, lu_dog).to_string();
-                    return Err(vec![DwarfError::NotAList {
-                        file: context.file_name.to_owned(),
-                        span: target_p.1.clone(),
-                        ty,
-                        location: location!(),
-                        program: context.source_string.to_owned(),
-                    }]);
-                }
-            } else {
-                let ty = PrintableValueType(true, &target_ty, context, lu_dog).to_string();
-                return Err(vec![DwarfError::NotAList {
-                    file: context.file_name.to_owned(),
-                    span: target_p.1.clone(),
-                    ty,
-                    location: location!(),
-                    program: context.source_string.to_owned(),
-                }]);
-            };
-
-            let index = Index::new(&index.0, &target.0, lu_dog);
-            let expr = Expression::new_index(true, &index, lu_dog);
-            let value = XValue::new_expression(block, &target_ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), target_ty))
+        ParserExpression::Index(target, index) => {
+            index::inter(target, index, span, block, context, import_stack, lu_dog)
         }
         ParserExpression::IntegerLiteral(literal) => {
             integer_literal::inter(literal, span, block, context, lu_dog)
